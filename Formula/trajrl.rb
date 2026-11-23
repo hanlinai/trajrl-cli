@@ -5,21 +5,21 @@
 class Trajrl < Formula
   desc "Owner's command line for TrajRL sandboxes; verifies Intel TDX attestation"
   homepage "https://github.com/hanlinai/trajrl-cli"
-  version "0.2.0"
+  version "0.3.0"
   license "TBD (#130)"
 
   on_macos do
     if Hardware::CPU.intel?
-      url "https://github.com/hanlinai/trajrl-cli/releases/download/v0.2.0/trajrl_0.2.0_darwin_amd64.tar.gz"
-      sha256 "9605f1f8f8642ba0f0525fc2fd3e307618457e2035227982c2c59cebd464510e"
+      url "https://github.com/hanlinai/trajrl-cli/releases/download/v0.3.0/trajrl_0.3.0_darwin_amd64.tar.gz"
+      sha256 "e04cafb38c05c87bb1fe00aea0875c3ac1bed2f5677431896a0a4e410fa83547"
 
       define_method(:install) do
         bin.install "trajrl"
       end
     end
     if Hardware::CPU.arm?
-      url "https://github.com/hanlinai/trajrl-cli/releases/download/v0.2.0/trajrl_0.2.0_darwin_arm64.tar.gz"
-      sha256 "952bb4b8b8b2db760cbb5050bbbb771fb7e754afdb2bad49c6cef6a6d16ced22"
+      url "https://github.com/hanlinai/trajrl-cli/releases/download/v0.3.0/trajrl_0.3.0_darwin_arm64.tar.gz"
+      sha256 "7756f36b5470263217b915dc6814774571cb4ef794174944f442c58280801e3a"
 
       define_method(:install) do
         bin.install "trajrl"
@@ -29,15 +29,15 @@ class Trajrl < Formula
 
   on_linux do
     if Hardware::CPU.intel? && Hardware::CPU.is_64_bit?
-      url "https://github.com/hanlinai/trajrl-cli/releases/download/v0.2.0/trajrl_0.2.0_linux_amd64.tar.gz"
-      sha256 "220cc3b6fd27980a9cb7cab48f073540ac153ebc560e72190547551e02eddf3b"
+      url "https://github.com/hanlinai/trajrl-cli/releases/download/v0.3.0/trajrl_0.3.0_linux_amd64.tar.gz"
+      sha256 "c55d8fa3d1276adcfe5f9b579756a0c053ca9f7eaf7f2225b15dda18f280daf3"
       define_method(:install) do
         bin.install "trajrl"
       end
     end
     if Hardware::CPU.arm? && Hardware::CPU.is_64_bit?
-      url "https://github.com/hanlinai/trajrl-cli/releases/download/v0.2.0/trajrl_0.2.0_linux_arm64.tar.gz"
-      sha256 "8909c51ca21480ec748320f42b0df80de2818aef3699b2aee15367ba3820f527"
+      url "https://github.com/hanlinai/trajrl-cli/releases/download/v0.3.0/trajrl_0.3.0_linux_arm64.tar.gz"
+      sha256 "330375e2f7caf2434105423aec848feea3901e76e8205c5aa0901f4aa9269c5d"
       define_method(:install) do
         bin.install "trajrl"
       end
