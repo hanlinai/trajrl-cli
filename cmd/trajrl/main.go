@@ -30,7 +30,7 @@ import (
 )
 
 // version is trajrl's version, set here in the source (no -X at build).
-const version = "0.2.0"
+const version = "0.3.0"
 
 const prog = "trajrl"
 

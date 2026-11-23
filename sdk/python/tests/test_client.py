@@ -18,7 +18,7 @@ def test_version_is_checked_first(fake):
 
 
 def test_one_version():
-    assert trajrl.__version__ == "0.2.0"
+    assert trajrl.__version__ == "0.3.0"
 
 
 # The missing binary.
