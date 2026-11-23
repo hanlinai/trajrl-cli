@@ -1,11 +1,16 @@
 # A tag vX.Y.Z makes the release with GoReleaser (.goreleaser.yaml): the
 # GitHub Release, the Homebrew formula (Formula/) and the Scoop manifest
-# (bucket/) in this repository, .deb and .rpm.
+# (bucket/) in this repository, .deb and .rpm. Then, if the repository
+# variable PYPI_PUBLISH is true, the pypi job builds the Python SDK
+# (sdk/python, trajrl-sdk), whose version must be X.Y.Z, adds its sdist and
+# wheel to the Release and publishes them to PyPI by trusted publishing
+# (OIDC: no token; the publisher registered on PyPI for this repository,
+# release.yml and the environment pypi).
 #
 # Tags are pushed by the TrajRL monorepo's cli-sync workflow (for its tag
 # sbx-vX.Y.Z), or by hand.
 #
-# Secrets: only GITHUB_TOKEN (automatic).
+# Secrets: only GITHUB_TOKEN (automatic). Variables: PYPI_PUBLISH.
 #
 # This file is generated from the TrajRL monorepo (prototype/release/trajrl-repo/).
 name: release
@@ -49,3 +54,52 @@ jobs:
         env:
           GOTOOLCHAIN: local
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  pypi:
+    needs: goreleaser
+    # Off until PyPI has the pending publisher: set the repository variable
+    # PYPI_PUBLISH to true then. Otherwise the job is skipped.
+    if: vars.PYPI_PUBLISH == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment:
+      name: pypi
+      url: https://pypi.org/project/trajrl-sdk/
+    permissions:
+      contents: write # gh release upload
+      id-token: write # PyPI trusted publishing
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - name: test
+        working-directory: sdk/python
+        run: |
+          python -m pip install --disable-pip-version-check -q pytest==9.2.0
+          python -m pytest -q -p no:cacheprovider
+      - name: build, the version the tag's
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          python -m pip install --disable-pip-version-check -q build==1.6.1
+          python -m build --outdir pydist sdk/python
+          v=${TAG#v}
+          ls -l pydist
+          test -f "pydist/trajrl_sdk-$v-py3-none-any.whl" && test -f "pydist/trajrl_sdk-$v.tar.gz" || {
+            echo "::error::sdk/python's version is not $v (the tag $TAG): set __version__ in sdk/python/src/trajrl/__init__.py"
+            exit 1
+          }
+          set -- pydist/*
+          test "$#" = 2 # these two, nothing else
+      - name: add them to the GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: gh release upload "$TAG" pydist/* --clobber
+      - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
+        with:
+          packages-dir: pydist/

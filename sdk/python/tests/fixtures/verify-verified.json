@@ -1,0 +1,1 @@
+{"verdict":"VERIFIED","sandbox_id":"sbx-24d9e41f834a2aeb","checked_at":"2026-11-17T08:00:00Z","quote":{"quote_sha256":"3d02","mrtd":"f928","rtmrs":["48","58","d3","00"],"tee_tcb_svn":"0a010400000000000000000000000000","platform_tcb":"UpToDate","tdx_module_tcb_status":"UpToDate","qe_tcb_status":"UpToDate","policy":"image-r8","fmspc":"90c06f000000"},"unlocked_by_owner":true}

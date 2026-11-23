@@ -1,0 +1,42 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+# "trajrl" on PyPI is another project's (TrajectoryRL's subnet CLI); the
+# import name is trajrl all the same.
+name = "trajrl-sdk"
+dynamic = ["version"]
+description = "Python SDK for TrajRL's TDX sandboxes: drives the trajrl command line on the owner's machine"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = []
+keywords = ["trajrl", "sandbox", "tdx", "confidential-computing"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Typing :: Typed",
+]
+
+[project.urls]
+Homepage = "https://github.com/hanlinai/trajrl-cli"
+Source = "https://github.com/hanlinai/trajrl-cli/tree/main/sdk/python"
+Issues = "https://github.com/hanlinai/trajrl-cli/issues"
+
+# The version is __version__ in src/trajrl/__init__.py, and nowhere else.
+[tool.hatch.version]
+path = "src/trajrl/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/trajrl"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/trajrl", "tests", "README.md", "pyproject.toml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# The tests run against the source tree, not an installed copy.
+pythonpath = ["src"]

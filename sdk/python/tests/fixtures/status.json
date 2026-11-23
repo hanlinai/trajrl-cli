@@ -1,0 +1,9 @@
+{
+  "configured": true,
+  "entry": "sbx.example:2222",
+  "notices": ["Planned maintenance of host1 on 2026-11-30 at 02:00 UTC."],
+  "sandboxes": [
+    {"name": "web", "id": "sbx-0000000000000001", "state": "waiting for its owner's key", "size": "small", "waiting_for_key": true, "verified_host_key": false, "https_url": "https://web.sbx.example", "next": "trajrl unlock web"},
+    {"name": "api", "id": "sbx-0000000000000002", "state": "running", "size": "medium", "waiting_for_key": false, "verified_host_key": true, "last_verified": "2026-11-18T10:00:00Z", "next": ""}
+  ]
+}

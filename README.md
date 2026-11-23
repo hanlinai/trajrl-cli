@@ -14,6 +14,8 @@ Windows):
 - `trajrl ssh`, `exec` and `cp` reach a sandbox only with the host key verified here.
 - Every other command is the platform's entry point's, forwarded as it is.
 - `trajrl skills install` gives coding agents the skills in `skills/`.
+- Python SDK: `pip install trajrl-sdk` (`import trajrl`) drives this `trajrl` from Python
+  through its `--json` interface; see [`sdk/python`](sdk/python).
 
 None of it trusts the service that runs the sandbox. This repository holds its full source; the
 released binaries are built from it and rebuild bit for bit (see [Build from source](#build-from-source)).

@@ -1,0 +1,58 @@
+[
+ {
+  "name": "web",
+  "id": "sbx-0000000000000001",
+  "state": "running",
+  "size": "small",
+  "vcpus": 2,
+  "memory_gib": 4,
+  "disk_gib": 8,
+  "image": "stable",
+  "created": "2026-11-18T09:30:00Z",
+  "address": "host1.example",
+  "port": 22001,
+  "host_key": "ssh-ed25519 AAAAguestkey",
+  "boots": 1,
+  "boot_stages": {
+   "stages": [
+    {
+     "name": "vmm_started",
+     "ms": 0
+    },
+    {
+     "name": "key_dialed",
+     "ms": 1200
+    },
+    {
+     "name": "ssh_up",
+     "ms": 14500
+    }
+   ],
+   "platform_ms": 6500
+  },
+  "public": false,
+  "ssh_command": "ssh root@web.sbx.example",
+  "replica": {
+   "host": "h2",
+   "gen": 3,
+   "time": "2026-11-18T09:30:00Z",
+   "age_seconds": 42
+  }
+ },
+ {
+  "name": "web2",
+  "id": "sbx-0000000000000002",
+  "state": "running",
+  "size": "small",
+  "vcpus": 2,
+  "memory_gib": 4,
+  "disk_gib": 16,
+  "image": "stable",
+  "created": "2026-11-18T09:30:00Z",
+  "address": "host1.example",
+  "port": 22002,
+  "boots": 1,
+  "public": false,
+  "ssh_command": "ssh root@web2.sbx.example"
+ }
+]

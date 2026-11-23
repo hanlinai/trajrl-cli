@@ -1,0 +1,8 @@
+{
+  "ok": false,
+  "checks": [
+    {"name": "config", "status": "ok", "message": "/home/owner/.config/trajrl/config.json: entry point sbx.example:2222, domain sbx.example"},
+    {"name": "ssh-key", "status": "ok", "message": "your SSH agent's keys"},
+    {"name": "entry", "status": "fail", "message": "sbx.example:2222: connection refused", "fix": "check your network, or run trajrl setup again"}
+  ]
+}
