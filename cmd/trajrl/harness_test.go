@@ -145,9 +145,19 @@ func (e *fakeEntry) jump(nc ssh.NewChannel) {
 	}
 	defer ch.Close()
 	go ssh.DiscardRequests(reqs)
+	// Both directions to their end, each closing only its own side, as
+	// the entry point's jump does: the client's EOF must not cut off what
+	// the sandbox is still sending back.
 	done := make(chan struct{}, 2)
-	go func() { io.Copy(up, ch); done <- struct{}{} }()
+	go func() {
+		io.Copy(up, ch)
+		if cw, ok := up.(interface{ CloseWrite() error }); ok {
+			cw.CloseWrite()
+		}
+		done <- struct{}{}
+	}()
 	go func() { io.Copy(ch, up); ch.CloseWrite(); done <- struct{}{} }()
+	<-done
 	<-done
 }
 

@@ -20,24 +20,21 @@ released binaries are built from it and rebuild bit for bit (see [Build from sou
 
 ## Install
 
-**Status:** the repository is private and its licence is not chosen yet (#130). Until it is
-public, release downloads need GitHub access to it, and `winget` and `go install` are not
-available.
+**Status:** the licence is not chosen yet (#130).
 
-Homebrew (macOS, Linux):
+Homebrew (macOS, Linux): this repository is the tap.
 
 ```
-brew install hanlinai/tap/trajrl
+brew tap hanlinai/trajrl-cli https://github.com/hanlinai/trajrl-cli
+brew install trajrl
 ```
 
-Scoop (Windows):
+Scoop (Windows): this repository is the bucket.
 
 ```
-scoop bucket add hanlinai https://github.com/hanlinai/scoop-bucket
-scoop install hanlinai/trajrl
+scoop bucket add trajrl https://github.com/hanlinai/trajrl-cli
+scoop install trajrl
 ```
-
-winget (Windows): soon, once the repository is public.
 
 Debian, Ubuntu (`.deb`) and Fedora, RHEL (`.rpm`): download the package for your machine from
 [Releases](https://github.com/hanlinai/trajrl-cli/releases), then
@@ -54,10 +51,7 @@ curl -fsSL https://sandbox.trajrl.com/trajrl/install.sh | sh             # Linux
 irm https://sandbox.trajrl.com/trajrl/install.ps1 | iex                  # Windows PowerShell
 ```
 
-While the repository is private, point them at a copy of the release files with
-`TRAJRL_BASE_URL`.
-
-Go, once the repository is public:
+Go (builds from source):
 
 ```
 go install github.com/hanlinai/trajrl-cli/cmd/trajrl@latest

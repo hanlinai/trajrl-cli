@@ -1,10 +1,9 @@
 # GoReleaser: one tag (vX.Y.Z) makes the whole release of trajrl:
-#   - GitHub Release (a draft while the repository is private)
+#   - GitHub Release
 #   - raw binaries trajrl-OS-ARCH[.exe], what install.sh / install.ps1 fetch
-#   - archives (tar.gz; zip on Windows), for Homebrew, Scoop and winget
+#   - archives (tar.gz; zip on Windows), for Homebrew and Scoop
 #   - SHA256SUMS over all of it
-#   - Homebrew formula -> hanlinai/homebrew-tap, Scoop manifest -> hanlinai/scoop-bucket
-#   - winget manifests (generated, not submitted while the repository is private)
+#   - Homebrew formula -> Formula/, Scoop manifest -> bucket/, in this repository
 #   - .deb and .rpm
 #
 # The binaries are built like release/build-owner-tools.sh builds them
@@ -13,8 +12,9 @@
 # same bytes. trajrl's version is a constant in cmd/trajrl/main.go, so
 # nothing is injected with -X.
 #
-# Secrets (in this repository): TAP_GITHUB_TOKEN, a fine-grained token with
-# contents write on hanlinai/homebrew-tap and hanlinai/scoop-bucket.
+# No extra secret: the Homebrew formula (Formula/) and the Scoop manifest
+# (bucket/) are written to this same repository with the workflow's own
+# GITHUB_TOKEN.
 #
 # This file is generated from the TrajRL monorepo (prototype/release/trajrl-repo/).
 version: 2
@@ -69,9 +69,9 @@ release:
   github:
     owner: hanlinai
     name: trajrl-cli
-  # A draft while the repository is private: publish it by hand. Set to
-  # false when the repository is public.
-  draft: true
+  # Published as soon as it is built (the repository is public). A tag with a
+  # suffix (v1.2.3-rc.1) is a prerelease, which releases/latest/download skips.
+  draft: false
   prerelease: auto
 
 brews:
@@ -79,8 +79,9 @@ brews:
     ids: [default]
     repository:
       owner: hanlinai
-      name: homebrew-tap
-      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
+      name: trajrl-cli
+      branch: main
+      token: "{{ .Env.GITHUB_TOKEN }}"
     directory: Formula
     homepage: https://github.com/hanlinai/trajrl-cli
     description: Owner's command line for TrajRL sandboxes; verifies Intel TDX attestation
@@ -95,27 +96,14 @@ scoops:
     ids: [default]
     repository:
       owner: hanlinai
-      name: scoop-bucket
-      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
+      name: trajrl-cli
+      branch: main
+      token: "{{ .Env.GITHUB_TOKEN }}"
+    directory: bucket
     homepage: https://github.com/hanlinai/trajrl-cli
     description: Owner's command line for TrajRL sandboxes; verifies Intel TDX attestation
     license: "TBD (#130)"
 
-winget:
-  - name: trajrl
-    ids: [default]
-    publisher: TrajRL
-    short_description: Owner's command line for TrajRL sandboxes
-    license: "TBD (#130)"
-    homepage: https://github.com/hanlinai/trajrl-cli
-    publisher_url: https://sandbox.trajrl.com
-    package_identifier: TrajRL.trajrl
-    # enable when the repo is public (winget-pkgs needs public download URLs)
-    skip_upload: true
-    repository:
-      owner: hanlinai
-      name: winget-pkgs
-      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
 
 nfpms:
   - id: packages

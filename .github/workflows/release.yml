@@ -1,13 +1,11 @@
 # A tag vX.Y.Z makes the release with GoReleaser (.goreleaser.yaml): the
-# GitHub Release (a draft while the repository is private), the Homebrew
-# formula in hanlinai/homebrew-tap, the Scoop manifest in hanlinai/scoop-bucket,
-# winget manifests (not submitted yet), .deb and .rpm.
+# GitHub Release, the Homebrew formula (Formula/) and the Scoop manifest
+# (bucket/) in this repository, .deb and .rpm.
 #
 # Tags are pushed by the TrajRL monorepo's cli-sync workflow (for its tag
 # sbx-vX.Y.Z), or by hand.
 #
-# Secrets: GITHUB_TOKEN (automatic) and TAP_GITHUB_TOKEN, a fine-grained token
-# with contents write on hanlinai/homebrew-tap and hanlinai/scoop-bucket.
+# Secrets: only GITHUB_TOKEN (automatic).
 #
 # This file is generated from the TrajRL monorepo (prototype/release/trajrl-repo/).
 name: release
@@ -51,4 +49,3 @@ jobs:
         env:
           GOTOOLCHAIN: local
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
