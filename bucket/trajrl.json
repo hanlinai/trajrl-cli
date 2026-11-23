@@ -1,0 +1,22 @@
+{
+    "version": "0.2.0",
+    "architecture": {
+        "64bit": {
+            "url": "https://github.com/hanlinai/trajrl-cli/releases/download/v0.2.0/trajrl_0.2.0_windows_amd64.zip",
+            "bin": [
+                "trajrl.exe"
+            ],
+            "hash": "04755a128dd0da1e850ca4fa5b7ba4d5bd90f3ce54f0d2ac6ecc64c24429d663"
+        },
+        "arm64": {
+            "url": "https://github.com/hanlinai/trajrl-cli/releases/download/v0.2.0/trajrl_0.2.0_windows_arm64.zip",
+            "bin": [
+                "trajrl.exe"
+            ],
+            "hash": "b2aa90b4c66d6a21bd2a8d647a1d4d6ecbd28f73c0f6a849450a93f11291fc71"
+        }
+    },
+    "homepage": "https://github.com/hanlinai/trajrl-cli",
+    "license": "TBD (#130)",
+    "description": "Owner's command line for TrajRL sandboxes; verifies Intel TDX attestation"
+}
