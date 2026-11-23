@@ -12,6 +12,7 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
+	"github.com/hanlinai/trajrl-cli/internal/cli/clierr"
 	"github.com/hanlinai/trajrl-cli/internal/userverify"
 )
 
@@ -44,14 +45,14 @@ func dialEntry(c *config) (*ssh.Client, error) {
 func forward(c *config, args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	client, err := dialEntry(c)
 	if err != nil {
-		fmt.Fprintf(stderr, "%s: %v\n", prog, err)
-		return 255
+		clierr.Write(stderr, prog, jsonMode, clierr.Transport, err.Error())
+		return clierr.Transport
 	}
 	defer client.Close()
 	s, err := client.NewSession()
 	if err != nil {
-		fmt.Fprintf(stderr, "%s: %v\n", prog, err)
-		return 255
+		clierr.Write(stderr, prog, jsonMode, clierr.Transport, err.Error())
+		return clierr.Transport
 	}
 	defer s.Close()
 	s.Stdin, s.Stdout, s.Stderr = stdin, stdout, stderr
@@ -63,8 +64,64 @@ func forward(c *config, args []string, stdin io.Reader, stdout, stderr io.Writer
 	case errors.As(err, &exit):
 		return exit.ExitStatus()
 	}
-	fmt.Fprintf(stderr, "%s: the entry point: %v\n", prog, err)
-	return 255
+	clierr.Write(stderr, prog, jsonMode, clierr.Transport, "the entry point: "+err.Error())
+	return clierr.Transport
+}
+
+// separators are the words a shell would have taken as the end of one
+// command, typed on one line to trajrl as plain words.
+var separators = map[string]bool{"/": true, ";": true, "&&": true, "|": true}
+
+// freeText are the platform's commands that take free text, where a
+// separator may be a word of it: "comment NAME TEXT...", "tag NAME TAG..."
+// (a tag may be any word, "trajrl" or "new" too), "ssh-key add KEY ...
+// COMMENT", "token new --label L".
+var freeText = map[string]bool{"comment": true, "tag": true, "ssh-key": true, "token": true}
+
+// severalCommands tells whether args, a command line for the entry point,
+// is several commands typed on one line ("ls / trajrl whoami / trajrl
+// doctor"), which the entry point would take as one. For a command that
+// takes free text, only a separator followed by the word trajrl is; for
+// any other, a lone separator is, and so is the word trajrl after the
+// first followed by a command's name ("ls trajrl whoami": "show trajrl" or
+// "rm trajrl --yes" name a sandbox called trajrl).
+func severalCommands(args []string) bool {
+	if len(args) == 0 {
+		return false
+	}
+	free := freeText[args[0]]
+	for i, a := range args {
+		next := ""
+		if i+1 < len(args) {
+			next = args[i+1]
+		}
+		switch {
+		case separators[a] && (!free || next == prog):
+			return true
+		case !free && i > 0 && a == prog && isCommandWord(next):
+			return true
+		}
+	}
+	return false
+}
+
+// isCommandWord tells whether w is the first word of one of trajrl's own
+// commands or of the platform's.
+func isCommandWord(w string) bool {
+	if w == "" {
+		return false
+	}
+	if _, ok := handlers[w]; ok {
+		return true
+	}
+	for _, g := range Platform {
+		for _, c := range g.Commands {
+			if first, _, _ := strings.Cut(c.Words, " "); first == w {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // forwardCmd is a command of the entry point's, forwarded.

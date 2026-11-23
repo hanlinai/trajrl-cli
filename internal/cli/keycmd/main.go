@@ -50,6 +50,7 @@ import (
 	"golang.org/x/term"
 
 	"github.com/hanlinai/trajrl-cli/internal/attest"
+	"github.com/hanlinai/trajrl-cli/internal/cli/clierr"
 	"github.com/hanlinai/trajrl-cli/internal/ownerkey"
 	"github.com/hanlinai/trajrl-cli/internal/proto"
 	"github.com/hanlinai/trajrl-cli/internal/userverify"
@@ -108,10 +109,36 @@ var (
 	rehearsalFlags func(fs *flag.FlagSet) (parsed func())
 )
 
+// die ends the command on err: exit status 1, or under trajrl the status
+// clierr gives err (3: the owner is needed, 255: the entry point was not
+// reached), with --json the error as one JSON object on stderr.
 func die(err error) {
-	fmt.Fprintln(os.Stderr, ownerkey.Tool+":", err)
-	os.Exit(1)
+	code := clierr.Code(err, clierr.Failed)
+	if ownerkey.Tool == "sbxkey" {
+		code = clierr.Failed
+	}
+	clierr.Write(os.Stderr, ownerkey.Tool, asJSON, code, err.Error())
+	os.Exit(code)
 }
+
+// usageExit ends the command on a wrong command line: text, the usage, on
+// stderr, or with --json {"error": "usage: ...", "code": 2}.
+func usageExit(text string) {
+	if asJSON {
+		clierr.Write(os.Stderr, ownerkey.Tool, true, clierr.Usage, text)
+	} else {
+		fmt.Fprint(os.Stderr, text)
+	}
+	os.Exit(clierr.Usage)
+}
+
+// asJSON: --json was given to new, start or unlock (trajrl only): the
+// result is one JSON object on jsonOut (the real stdout), everything for
+// people goes to stderr, and an error is {"error": ..., "code": N}.
+var (
+	asJSON  bool
+	jsonOut = os.Stdout
+)
 
 // Options is what trajrl gives sbxkey's commands (#123). The zero value is
 // sbxkey as it is; the commands it prints name ownerkey.Tool.
@@ -128,6 +155,8 @@ type Options struct {
 	NoPolicy string
 	// ArgsAfterName lets start and unlock take their flags after NAME too.
 	ArgsAfterName bool
+	// JSON: --json is among the arguments (trajrl's new, start, unlock).
+	JSON bool
 }
 
 // options are this run's.
@@ -190,6 +219,8 @@ type opts struct {
 	wait                              time.Duration
 	keyPath, statePath, knownHostPath string
 	pin                               sshPin
+	// json: -json was given (trajrl's new, start, unlock).
+	json bool
 }
 
 // DefaultDir is sbxkey's own directory: $SBXKEY_DIR, or sbxkey in the
@@ -219,6 +250,16 @@ func MainWith(args []string, opt Options) {
 		os.Exit(2)
 	}
 	cmd := args[0]
+	boot := cmd == "start" || cmd == "unlock" || cmd == "new"
+	// --json is trajrl's, for new, start and unlock (sbxkey has none).
+	jsonFlag := boot && ownerkey.Tool != "sbxkey"
+	if jsonFlag && opt.JSON {
+		asJSON = true
+		// Whatever is printed for people goes to stderr; stdout carries
+		// the one object.
+		jsonOut, os.Stdout = os.Stdout, os.Stderr
+		defer func() { os.Stdout = jsonOut }()
+	}
 	if cmd == "keys" || cmd == "recovery-key" { // keys.go (#65)
 		if err := keysMain(args); err != nil {
 			die(err)
@@ -228,10 +269,18 @@ func MainWith(args []string, opt Options) {
 	var o opts
 	fs := flag.NewFlagSet(ownerkey.Command(cmd), flag.ExitOnError)
 	fs.Usage = func() { fmt.Fprint(os.Stderr, usage) }
+	if asJSON {
+		// A wrong flag is said as JSON too (parseFailed), and only that.
+		fs.Init(ownerkey.Command(cmd), flag.ContinueOnError)
+		fs.SetOutput(io.Discard)
+		fs.Usage = func() {}
+	}
 	var parsed func()
 	fs.StringVar(&o.dir, "dir", defaultDir(), "where the key file, the state and known_hosts are")
 	fs.StringVar(&o.passFile, "passphrase-file", "", "a file only you can read holding the key file's passphrase (default: asked on the terminal)")
-	boot := cmd == "start" || cmd == "unlock" || cmd == "new"
+	if jsonFlag {
+		fs.BoolVar(&o.json, "json", false, "print the result as one JSON object on stdout (the account for people goes to stderr)")
+	}
 	if boot {
 		fs.StringVar(&o.entry, "entry", "", "the platform's SSH entry point, host:port")
 		fs.StringVar(&o.entryKey, "entry-key", "", "the entry point's SSH host key as the platform publishes it")
@@ -263,9 +312,11 @@ func MainWith(args []string, opt Options) {
 	sshPinFlags(fs, &o, cmd)
 	var pos []string
 	if opt.ArgsAfterName && (cmd == "start" || cmd == "unlock") {
-		pos, _ = parseInterleaved(fs, args[1:]) // exits on an error
+		var err error
+		pos, err = parseInterleaved(fs, args[1:]) // exits on an error, but with --json
+		parseFailed(err)
 	} else {
-		fs.Parse(args[1:])
+		parseFailed(fs.Parse(args[1:]))
 		pos = fs.Args()
 	}
 	applyDefaults(fs)
@@ -296,8 +347,7 @@ func MainWith(args []string, opt Options) {
 		err = backupCheck(&o)
 	case "start", "unlock", "new":
 		if len(pos) < 1 || (cmd != "new" && len(pos) != 1) {
-			fmt.Fprint(os.Stderr, usage)
-			os.Exit(2)
+			usageExit(usage)
 		}
 		err = unlock(&o, cmd == "new", pos[0], pos[1:])
 	case "rename":
@@ -315,6 +365,19 @@ func MainWith(args []string, opt Options) {
 	if err != nil {
 		die(err)
 	}
+}
+
+// parseFailed ends the command on a flag the flag set refused: only with
+// --json does the flag set return the error (ContinueOnError) rather than
+// exit, and it is said as JSON, with exit status 2.
+func parseFailed(err error) {
+	if err == nil {
+		return
+	}
+	if errors.Is(err, flag.ErrHelp) {
+		usageExit(renderUsage(usage + rehearsalUsage))
+	}
+	die(clierr.With(clierr.Usage, err))
 }
 
 // --- passphrases and the terminal -------------------------------------------
@@ -341,7 +404,9 @@ func passphrase(o *opts, isNew bool) ([]byte, error) {
 	case o.passFile != "":
 		p, err = ownerkey.ReadPassphraseFile(o.passFile)
 	case !isNew:
-		p, err = askSecret("Passphrase of " + o.keyPath + ": ")
+		// -passphrase-file, $TRAJRL_PASSPHRASE_FILE, the terminal; never a
+		// wait on a stdin that is not one (ErrNeedsPassphrase).
+		p, err = ownerkey.Passphrase("", "Passphrase of "+o.keyPath+": ")
 	default:
 		if p, err = askSecret(fmt.Sprintf("New passphrase for the key file (at least %d characters): ", ownerkey.MinPassphrase)); err != nil {
 			return nil, err
@@ -542,6 +607,10 @@ func unlock(o *opts, isNew bool, name string, entryArgs []string) error {
 	if !ownerkey.ValidName(name) {
 		return fmt.Errorf("%q is not a sandbox name", name)
 	}
+	if isNew && ownerkey.Tool != "sbxkey" {
+		// --json after NAME is trajrl's, never the platform's new.
+		entryArgs = slices.DeleteFunc(slices.Clone(entryArgs), clierr.IsJSONFlag)
+	}
 	if err := o.prompt.check(isNew, o.setupScript); err != nil {
 		return err
 	}
@@ -644,7 +713,7 @@ func unlock(o *opts, isNew bool, name string, entryArgs []string) error {
 
 	entry, err := userverify.DialEntry(o.entry, o.entryKey, id.Auth)
 	if err != nil {
-		return err
+		return clierr.With(clierr.Transport, err)
 	}
 	defer entry.Close()
 	domain := sandboxDomain(o, st, func() (string, error) { return ownerkey.RunEntry(entry, []string{"domain"}) })
@@ -695,6 +764,17 @@ func unlock(o *opts, isNew bool, name string, entryArgs []string) error {
 		// secret and to its image (#112); the running sandbox's quote
 		// shows both.
 		fmt.Printf("  to check that the running sandbox is the TD you unlocked, running the image you asked for:\n    %s\n", verifyLine(o, name))
+	}
+	if err == nil && asJSON {
+		var state *string
+		if v, serr := showSandbox(entry, name); serr == nil && v.State != "" {
+			state = &v.State
+		}
+		hostKey := res.HostKey
+		if r := st.ByName(name); r != nil && r.SSHHostKey != "" {
+			hostKey = r.SSHHostKey
+		}
+		writeBootJSON(jsonOut, bootResultOf(name, state, res, hostKey))
 	}
 	return err
 }

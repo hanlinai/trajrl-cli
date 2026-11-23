@@ -307,18 +307,18 @@ func TestExecKeySource(t *testing.T) {
 		}
 	}
 	// sbxverify's record comes first: the owner's record and the platform
-	// are not asked (the sandbox's API is not there, so the call fails
-	// after the key and the name were settled).
+	// are not asked (the call fails after the pin and the name were
+	// settled, at your SSH key: none here, exit status 1).
 	n := len(func() []string { s, _ := e.seen(); return s }())
 	if err := sbxapi.RecordPin(sbxapi.DefaultPinFile(), sbxapi.Pin{Name: "rec", ID: idB, HostKey: key, HTTPSURL: "https://rec-alice.sbx.example", Verified: time.Now()}); err != nil {
 		t.Fatal(err)
 	}
 	_, errs, code := trajrl(t, "", "exec", "-connect", "127.0.0.1:1", "rec", "--", "true")
-	if code != 255 || strings.Contains(errs, "verify") || !strings.Contains(errs, "trajrl:") {
+	if code != 1 || strings.Contains(errs, "verify") || !strings.Contains(errs, "trajrl: no SSH key") {
 		t.Fatalf("exec with sbxverify's record: %d %q", code, errs)
 	}
 	_, errs, code = trajrl(t, "", "exec", "nopol", "--", "true")
-	if code != 255 || !strings.Contains(errs, "trajrl: your record of nopol was made without a quote") {
+	if code != 1 || !strings.Contains(errs, "trajrl: your record of nopol was made without a quote") {
 		t.Fatalf("exec of a record without a policy: %d %q", code, errs)
 	}
 	if execs, _ := e.seen(); len(execs) != n {
@@ -386,7 +386,7 @@ func TestPolicy(t *testing.T) {
 	if files, _ := policies(); len(files) != 0 {
 		t.Fatalf("after rm: %q", files)
 	}
-	if _, errs, code := trajrl(t, "", "verify", "--all", "-owner"); code != 2 || !strings.Contains(errs, "-passphrase-file") {
+	if _, errs, code := trajrl(t, "", "verify", "--all", "-owner"); code != 3 || !strings.Contains(errs, "-passphrase-file") {
 		t.Fatalf("verify --all -owner: %d %q", code, errs)
 	}
 }

@@ -11,7 +11,9 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
+	"github.com/hanlinai/trajrl-cli/internal/cli/clierr"
 	"github.com/hanlinai/trajrl-cli/internal/cli/keycmd"
 	"github.com/hanlinai/trajrl-cli/internal/ownerkey"
 	"github.com/hanlinai/trajrl-cli/internal/sbxapi"
@@ -183,6 +185,29 @@ func apiFallback(c *config) func(name string) (string, string, error) {
 			return "", "", fmt.Errorf("the platform names no https_url for %s: %s", name, verify)
 		}
 		return r.SSHHostKey, u.Hostname(), nil
+	}
+}
+
+// waitsForKey is how exec and cp explain a sandbox's API that was not
+// reached: if the platform shows name waiting for its owner's key, the
+// error that says so, with exit status 3 (clierr.NeedsOwner); otherwise
+// nil.
+func waitsForKey(c *config) func(name string) error {
+	return func(name string) error {
+		if c.Entry == "" || !ownerkey.ValidName(name) {
+			return nil
+		}
+		out, _, err := entryOutputWithin(c, 15*time.Second, "show", name, "--json")
+		if err != nil {
+			return nil
+		}
+		var v struct {
+			State string `json:"state"`
+		}
+		if json.Unmarshal(out, &v) != nil || v.State != stateWaitingForKey {
+			return nil
+		}
+		return clierr.With(clierr.NeedsOwner, fmt.Errorf("%s waits for its owner's key: run %s unlock %s", name, prog, name))
 	}
 }
 

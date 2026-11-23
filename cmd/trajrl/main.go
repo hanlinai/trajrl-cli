@@ -17,11 +17,13 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
 
 	"github.com/hanlinai/trajrl-cli/internal/cli/apicmd"
+	"github.com/hanlinai/trajrl-cli/internal/cli/clierr"
 	"github.com/hanlinai/trajrl-cli/internal/cli/keycmd"
 	"github.com/hanlinai/trajrl-cli/internal/cli/verifycmd"
 	"github.com/hanlinai/trajrl-cli/internal/ownerkey"
@@ -55,7 +57,7 @@ var handlers = map[string]func(args []string) int{
 	"backup":       backupCmd,
 	"doctor":       doctorCmd,
 	"skills":       skillsCmd,
-	"version":      func([]string) int { fmt.Println(prog, version); return 0 },
+	"version":      versionCmd,
 	"help":         helpCmd,
 	"entry":        func(args []string) int { return forwardCmd(args[1:]) },
 	"sbxkey":       legacy,
@@ -87,8 +89,17 @@ func run(args []string) int {
 	case "-version", "--version":
 		args = []string{"version"}
 	}
+	if args[0] != "sbxkey" && args[0] != "sbxverify" && args[0] != "sbxapi" {
+		jsonMode = clierr.WantsJSON(args)
+	}
 	h := handlers[args[0]]
 	if h == nil {
+		// Several commands typed on one line are refused here, not sent
+		// to the entry point as one (entry.go); "trajrl entry ..." sends
+		// anything as it is.
+		if severalCommands(args) {
+			return fail(clierr.Usage, "this looks like several commands on one line (%q); run them one per line, e.g. %s ls, then %s whoami", joinArgs(args), prog, prog)
+		}
 		return forwardCmd(args)
 	}
 	if args[0] != "sbxkey" && args[0] != "sbxverify" && args[0] != "sbxapi" {
@@ -97,10 +108,42 @@ func run(args []string) int {
 	return h(args)
 }
 
-// fail says err as trajrl and returns status.
+// jsonMode: --json was given to one of trajrl's own commands: fail says
+// its error as {"error": "...", "code": N} on stderr.
+var jsonMode bool
+
+// fail says err as trajrl, or with --json as one JSON object, and returns
+// status (clierr: 1 failed, 2 usage, 3 needs the owner, 255 transport).
 func fail(status int, format string, a ...any) int {
-	fmt.Fprintf(os.Stderr, prog+": "+format+"\n", a...)
+	clierr.Write(os.Stderr, prog, jsonMode, status, fmt.Sprintf(format, a...))
 	return status
+}
+
+// versionCmd is "version [--json]".
+func versionCmd(args []string) int {
+	switch {
+	case len(args) == 1:
+		fmt.Println(prog, version)
+		return 0
+	case len(args) == 2 && clierr.IsJSONFlag(args[1]):
+		// min_entry: the oldest entry point this trajrl works with; there
+		// is no such notion yet, so null.
+		return printJSON(struct {
+			Version  string  `json:"version"`
+			MinEntry *string `json:"min_entry"`
+		}{version, nil})
+	}
+	return fail(clierr.Usage, "usage: %s version [--json]", prog)
+}
+
+// printJSON prints v as one line on stdout.
+func printJSON(v any) int {
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(v); err != nil {
+		return fail(clierr.Failed, "%v", err)
+	}
+	return 0
 }
 
 // legacy is "trajrl sbxkey|sbxverify|sbxapi ARGS": the old program as it
@@ -142,14 +185,19 @@ func keyCmd(args []string) int {
 // bootCmd is new, start, unlock and known-hosts: sbxkey's; start and
 // unlock take their flags after NAME too.
 func bootCmd(args []string) int {
-	keycmd.MainWith(args, keyOptions(loadConfigOrEmpty(), args[0] == "start" || args[0] == "unlock"))
+	o := keyOptions(loadConfigOrEmpty(), args[0] == "start" || args[0] == "unlock")
+	// --json, before NAME or after it (new: among the platform's flags,
+	// taken off them there), is trajrl's: one object on stdout.
+	o.JSON = args[0] != "known-hosts" && clierr.WantsJSON(args[1:])
+	keycmd.MainWith(args, o)
 	return 0
 }
 
 // apiCmd is exec and cp: sbxapi's, with the owner's record as a second
 // source of the pinned key (exec.go).
 func apiCmd(args []string) int {
-	apicmd.MainWith(args, apicmd.Options{Prog: prog, Fallback: apiFallback(loadConfigOrEmpty())})
+	c := loadConfigOrEmpty()
+	apicmd.MainWith(args, apicmd.Options{Prog: prog, Fallback: apiFallback(c), Explain: waitsForKey(c)})
 	return 0
 }
 

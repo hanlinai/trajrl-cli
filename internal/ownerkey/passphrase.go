@@ -64,17 +64,37 @@ func AskSecret(prompt string) ([]byte, error) {
 	return p, err
 }
 
+// PassphraseFileEnv names the environment variable that names a
+// passphrase file, for a program that runs trajrl without a terminal.
+const PassphraseFileEnv = "TRAJRL_PASSPHRASE_FILE"
+
+// ErrNeedsPassphrase: the owner key's passphrase was given neither way and
+// there is no terminal to ask on (trajrl's exit status 3).
+var ErrNeedsPassphrase = errors.New("the owner key needs its passphrase: give -passphrase-file or " + PassphraseFileEnv)
+
+// Passphrase is the owner key's passphrase, from the first of: passFile
+// (-passphrase-file), the file $TRAJRL_PASSPHRASE_FILE names, the terminal
+// (asked with prompt, without echo). There is no passphrase agent. Without
+// any of them it is ErrNeedsPassphrase: a standard input that is not a
+// terminal is never read, so nothing waits on it.
+func Passphrase(passFile, prompt string) ([]byte, error) {
+	if passFile == "" {
+		passFile = os.Getenv(PassphraseFileEnv)
+	}
+	if passFile != "" {
+		return ReadPassphraseFile(passFile)
+	}
+	if !term.IsTerminal(int(os.Stdin.Fd())) {
+		return nil, ErrNeedsPassphrase
+	}
+	return AskSecret(prompt)
+}
+
 // OpenKeyFile opens the key file in dir with the passphrase from passFile,
-// or asked on the terminal.
+// or from where Passphrase finds it.
 func OpenKeyFile(dir, passFile string) (*Master, error) {
 	path := KeyFileIn(dir)
-	var pass []byte
-	var err error
-	if passFile != "" {
-		pass, err = ReadPassphraseFile(passFile)
-	} else {
-		pass, err = AskSecret("Passphrase of " + path + ": ")
-	}
+	pass, err := Passphrase(passFile, "Passphrase of "+path+": ")
 	if err != nil {
 		return nil, err
 	}

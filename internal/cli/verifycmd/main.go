@@ -52,6 +52,7 @@ import (
 	"time"
 
 	"github.com/hanlinai/trajrl-cli/internal/attest"
+	"github.com/hanlinai/trajrl-cli/internal/cli/clierr"
 	"github.com/hanlinai/trajrl-cli/internal/ownerkey"
 	"github.com/hanlinai/trajrl-cli/internal/proto"
 	"github.com/hanlinai/trajrl-cli/internal/sbxapi"
@@ -63,10 +64,20 @@ type paths []string
 func (p *paths) String() string     { return strings.Join(*p, ",") }
 func (p *paths) Set(v string) error { *p = append(*p, v); return nil }
 
+// die ends the check on err: exit status 1, as sbxverify's; under trajrl
+// the owner key's passphrase not given without a terminal is 3, and with
+// --json the error is said as {"error": ..., "code": N}.
 func die(err error) {
-	fmt.Fprintln(os.Stderr, prog+":", err)
-	os.Exit(1)
+	code := clierr.Failed
+	if prog != "sbxverify" {
+		code = clierr.Code(err, clierr.Failed)
+	}
+	clierr.Write(os.Stderr, prog, jsonErrors, code, err.Error())
+	os.Exit(code)
 }
+
+// jsonErrors: trajrl verify --json, whose errors are JSON too.
+var jsonErrors bool
 
 // prog is the program's name in its messages: sbxverify, or trajrl.
 var prog = "sbxverify"
@@ -206,6 +217,7 @@ func MainWith(args []string, opt Options) {
 	if opt.Prog != "" {
 		prog = opt.Prog
 	}
+	jsonErrors = prog != "sbxverify" && clierr.WantsJSON(args)
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	var t userverify.Target
 	var policies paths
@@ -342,6 +354,9 @@ func MainWith(args []string, opt Options) {
 		}
 		if rep != nil {
 			checks(os.Stderr, rep.Checks, "The verdict above stands: one check that does not hold is enough, and there is no option to overlook one.")
+		}
+		if jsonErrors {
+			clierr.Write(os.Stderr, prog, true, clierr.Failed, "NOT VERIFIED: "+err.Error())
 		}
 		os.Exit(1)
 	}

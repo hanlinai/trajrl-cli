@@ -23,6 +23,7 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
+	"github.com/hanlinai/trajrl-cli/internal/cli/clierr"
 	"github.com/hanlinai/trajrl-cli/internal/ownerkey"
 )
 
@@ -53,7 +54,8 @@ func confirmRecovered(name, notice string, c recoveredCheck) error {
 		fmt.Fprintln(c.errw, "  -accept-recovered: going on with this copy.")
 		return nil
 	case !c.tty:
-		return fmt.Errorf("%s is a recovered copy (above), and there is no terminal to ask on: give -accept-recovered to unlock it as it is; nothing was sent", name)
+		// The owner's decision is needed: exit status 3 (clierr.NeedsOwner).
+		return clierr.With(clierr.NeedsOwner, fmt.Errorf("%s is a recovered copy (above), and there is no terminal to ask on: give -accept-recovered to unlock it as it is; nothing was sent", name))
 	}
 	a, err := c.ask("continue with this copy? [y/N] ")
 	if err != nil {

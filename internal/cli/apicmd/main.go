@@ -20,23 +20,69 @@ package apicmd
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"os/signal"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/hanlinai/trajrl-cli/internal/cli/clierr"
 	"github.com/hanlinai/trajrl-cli/internal/sbxapi"
 )
 
+// die ends sbxapi with exit status 255, as it always has; trajrl with 1
+// (a local file, stdin), see fail.
 func die(format string, a ...any) {
-	fmt.Fprintf(os.Stderr, prog+": "+format+"\n", a...)
-	os.Exit(255)
+	fail(clierr.Failed, fmt.Errorf(format, a...))
 }
+
+// fail ends the command on err: sbxapi exits 255 on every error, as it
+// always has; trajrl exits with err's status (clierr), def if it has none,
+// and with --json says it as {"error": ..., "code": N}.
+func fail(def int, err error) {
+	code := clierr.Transport
+	if trajrl() {
+		code = clierr.Code(err, def)
+	}
+	clierr.Write(os.Stderr, prog, asJSON, code, err.Error())
+	os.Exit(code)
+}
+
+// failed is fail for an error of the sandbox's API: 255 if the API was not
+// reached (or the connection cut), 1 if it answered with a refusal; a
+// sandbox that waits for its owner's key is 3 (Options.Explain).
+func failed(name string, err error) {
+	if isTransport(err) {
+		if explain != nil {
+			if e := explain(name); e != nil {
+				fail(clierr.Failed, fmt.Errorf("%v (%w)", err, e))
+			}
+		}
+		fail(clierr.Transport, err)
+	}
+	fail(clierr.Failed, err)
+}
+
+// isTransport tells an error of the connection from an answer.
+func isTransport(err error) bool {
+	var ue *url.Error
+	return errors.As(err, &ue)
+}
+
+// trajrl tells whether this is trajrl's exec or cp, not sbxapi.
+func trajrl() bool { return prog != "sbxapi" }
+
+// asJSON: trajrl's --json was given.
+var asJSON bool
+
+// explain is this run's Options.Explain.
+var explain func(name string) error
 
 // prog is the program's name in its messages: sbxapi, or trajrl.
 var prog = "sbxapi"
@@ -50,6 +96,10 @@ type Options struct {
 	// server name of a sandbox that sbxverify's record does not have (and
 	// no -pin was given). An error is the refusal.
 	Fallback func(name string) (pin, host string, err error)
+	// Explain, if set, is asked why the sandbox name's API could not be
+	// reached; an error with clierr.NeedsOwner (it waits for its owner's
+	// key) makes the exit status 3. nil: no more is known.
+	Explain func(name string) error
 }
 
 // fallback is this run's Options.Fallback.
@@ -143,14 +193,17 @@ func (c *common) client(name string) (*sbxapi.Client, error) {
 }
 
 // parse reads flags wherever they are before "--", and returns the other
-// arguments and those after "--".
+// arguments and those after "--". A flag set that exits on an error never
+// returns one; with --json (ContinueOnError) it is said as JSON, status 2.
 func parse(fs *flag.FlagSet, args []string) (pos, tail []string) {
 	for {
 		// The flag package would take "--" as its own end of flags.
 		if len(args) > 0 && args[0] == "--" {
 			return pos, args[1:]
 		}
-		fs.Parse(args)
+		if err := fs.Parse(args); err != nil {
+			fail(clierr.Usage, err)
+		}
 		if n := len(args) - len(fs.Args()); n > 0 && args[n-1] == "--" {
 			return pos, fs.Args()
 		}
@@ -163,6 +216,34 @@ func parse(fs *flag.FlagSet, args []string) (pos, tail []string) {
 	}
 }
 
+// newFlags is a subcommand's flag set: one that exits on an error, as
+// sbxapi's, but with trajrl's --json one that returns it (parse).
+func newFlags(name string) *flag.FlagSet {
+	if asJSON {
+		fs := flag.NewFlagSet(name, flag.ContinueOnError)
+		fs.SetOutput(io.Discard)
+		return fs
+	}
+	return flag.NewFlagSet(name, flag.ExitOnError)
+}
+
+// jsonFlag adds trajrl's -json to fs (sbxapi has none).
+func jsonFlag(fs *flag.FlagSet, help string) {
+	if trajrl() {
+		fs.BoolVar(&asJSON, "json", asJSON, help)
+	}
+}
+
+// usageError ends the command on a wrong command line, status 2.
+func usageError(text string) {
+	if asJSON {
+		clierr.Write(os.Stderr, prog, true, clierr.Usage, text)
+	} else {
+		fmt.Fprintln(os.Stderr, text)
+	}
+	os.Exit(clierr.Usage)
+}
+
 // Main is sbxapi, its command line os.Args.
 func Main() { MainWith(os.Args[1:], Options{}) }
 
@@ -173,6 +254,8 @@ func MainWith(args []string, opt Options) {
 		prog = opt.Prog
 	}
 	fallback = opt.Fallback
+	explain = opt.Explain
+	asJSON = trajrl() && clierr.WantsJSON(args)
 	if len(args) < 1 {
 		fmt.Fprintln(os.Stderr, usage)
 		os.Exit(2)
@@ -191,22 +274,25 @@ func MainWith(args []string, opt Options) {
 }
 
 func execCmd(ctx context.Context, args []string) int {
-	fs := flag.NewFlagSet("exec", flag.ExitOnError)
+	fs := newFlags("exec")
 	var c common
 	c.flags(fs)
 	e := env{}
 	fs.Var(e, "e", "an environment variable NAME=VALUE (repeat)")
+	if trajrl() {
+		fs.Var(e, "env", "an environment variable NAME=VALUE (repeat); the same as -e")
+	}
 	cwd := fs.String("cwd", "", "working directory (default /root)")
 	timeout := fs.Int("timeout", 60, fmt.Sprintf("seconds the command may run, at most %d", sbxapi.MaxTimeout))
 	stdin := fs.Bool("stdin", false, "send this program's standard input to the command (read whole, before it starts)")
+	jsonFlag(fs, "print the command's output as NDJSON on stdout, the in-sandbox API's own lines: {\"stdout\": BASE64}, {\"stderr\": BASE64}, last {\"exit_code\": N}")
 	pos, cmd := parse(fs, args)
 	if len(pos) != 1 || len(cmd) == 0 {
-		fmt.Fprintln(os.Stderr, "usage: "+prog+" exec [flags] NAME -- COMMAND [ARG...]")
-		os.Exit(2)
+		usageError("usage: " + prog + " exec [flags] NAME -- COMMAND [ARG...]")
 	}
 	cl, err := c.client(pos[0])
 	if err != nil {
-		die("%v", err)
+		fail(clierr.Failed, err)
 	}
 	req := sbxapi.Exec{Argv: cmd, Cwd: *cwd, Env: e, TimeoutS: *timeout}
 	if *stdin {
@@ -216,8 +302,14 @@ func execCmd(ctx context.Context, args []string) int {
 		}
 		req.StdinB64 = sbxapi.B64(b)
 	}
+	if asJSON {
+		return execJSON(ctx, cl, pos[0], req)
+	}
 	code, err := cl.Run(ctx, req, os.Stdout, os.Stderr)
 	if err != nil {
+		if code < 0 && trajrl() {
+			failed(pos[0], err)
+		}
 		fmt.Fprintln(os.Stderr, prog+":", err)
 		if code < 0 {
 			return 255
@@ -226,15 +318,76 @@ func execCmd(ctx context.Context, args []string) int {
 	return code
 }
 
+// execJSON is trajrl exec --json: the in-sandbox API's NDJSON lines on
+// stdout as it sends them (sbxapi.Line: stdout and stderr base64, as Go
+// encodes bytes in JSON), its error line if it sent one, and last
+// {"exit_code": N}. The exit status is the command's.
+func execJSON(ctx context.Context, cl *sbxapi.Client, name string, req sbxapi.Exec) int {
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetEscapeHTML(false)
+	code, err := cl.Run(ctx, req, lineWriter{enc, false}, lineWriter{enc, true})
+	if code < 0 {
+		if err == nil {
+			err = sbxapi.ErrNoExit
+		}
+		failed(name, err)
+	}
+	if err != nil {
+		// The server's error line (a command killed at its time limit).
+		enc.Encode(sbxapi.Line{Error: err.Error()})
+	}
+	enc.Encode(sbxapi.Line{ExitCode: &code})
+	return code
+}
+
+// lineWriter writes each write as one line {"stdout": BASE64} (or
+// "stderr"): the line the in-sandbox API sent, as it sent it.
+type lineWriter struct {
+	enc    *json.Encoder
+	stderr bool
+}
+
+func (w lineWriter) Write(p []byte) (int, error) {
+	if len(p) == 0 {
+		return 0, nil
+	}
+	l := sbxapi.Line{Stdout: p}
+	if w.stderr {
+		l = sbxapi.Line{Stderr: p}
+	}
+	return len(p), w.enc.Encode(l)
+}
+
+// cpResult is what trajrl cp --json prints.
+type cpResult struct {
+	// Direction is "in" (into the sandbox) or "out".
+	Direction string `json:"direction"`
+	// Path is the path in the sandbox.
+	Path string `json:"path"`
+	// Bytes is how many bytes were copied.
+	Bytes int64 `json:"bytes"`
+}
+
+func printCp(r cpResult) {
+	if asJSON {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetEscapeHTML(false)
+		enc.Encode(r)
+	}
+}
+
 func cpCmd(ctx context.Context, args []string) {
-	fs := flag.NewFlagSet("cp", flag.ExitOnError)
+	fs := newFlags("cp")
 	var c common
 	c.flags(fs)
 	mode := fs.String("mode", "", "the file's mode in the sandbox, octal (default: the local file's)")
+	jsonFlag(fs, "print {\"direction\": \"in\"|\"out\", \"path\": PATH, \"bytes\": N} on stdout")
 	pos, _ := parse(fs, args)
 	if len(pos) != 2 {
-		fmt.Fprintln(os.Stderr, "usage: "+prog+" cp [flags] LOCAL NAME:/PATH | NAME:/PATH LOCAL")
-		os.Exit(2)
+		usageError("usage: " + prog + " cp [flags] LOCAL NAME:/PATH | NAME:/PATH LOCAL")
+	}
+	if asJSON && pos[1] == "-" {
+		usageError("usage: " + prog + " cp --json NAME:/PATH LOCAL: with --json, stdout is the result, not the file")
 	}
 	remote := func(s string) (string, string, bool) {
 		n, p, ok := strings.Cut(s, ":")
@@ -260,23 +413,27 @@ func cpCmd(ctx context.Context, args []string) {
 		}
 		cl, err := c.client(name)
 		if err != nil {
-			die("%v", err)
+			fail(clierr.Failed, err)
 		}
 		t0 := time.Now()
 		res, err := cl.Put(ctx, path, m, f, st.Size())
 		if err != nil {
-			die("%v", err)
+			failed(name, err)
 		}
 		fmt.Fprintf(os.Stderr, "%s -> %s:%s, %d bytes in %s, sha256 %s\n", pos[0], name, res.Path, res.Size, time.Since(t0).Round(time.Millisecond), res.SHA256)
+		printCp(cpResult{Direction: "in", Path: res.Path, Bytes: res.Size})
 		return
 	}
 	name, path, ok := remote(pos[0])
 	if !ok {
+		if trajrl() {
+			usageError(prog + ": one of the two must be NAME:/PATH")
+		}
 		die("one of the two must be NAME:/PATH")
 	}
 	cl, err := c.client(name)
 	if err != nil {
-		die("%v", err)
+		fail(clierr.Failed, err)
 	}
 	out := os.Stdout
 	if pos[1] != "-" {
@@ -289,7 +446,7 @@ func cpCmd(ctx context.Context, args []string) {
 	}
 	n, err := cl.Get(ctx, path, out)
 	if err != nil {
-		die("%v", err)
+		failed(name, err)
 	}
 	if out != os.Stdout {
 		if err := out.Close(); err != nil {
@@ -300,6 +457,7 @@ func cpCmd(ctx context.Context, args []string) {
 		}
 		fmt.Fprintf(os.Stderr, "%s:%s -> %s, %d bytes\n", name, path, pos[1], n)
 	}
+	printCp(cpResult{Direction: "out", Path: path, Bytes: n})
 }
 
 func dirOf(p string) string {

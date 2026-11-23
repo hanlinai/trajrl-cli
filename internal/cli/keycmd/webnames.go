@@ -40,6 +40,7 @@ import (
 
 // sandboxView is what sbxkey reads of `show NAME --json`.
 type sandboxView struct {
+	State     string `json:"state"`
 	Recovered string `json:"recovered"`
 	URL       string `json:"https_url"`
 	Ports     []struct {

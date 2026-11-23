@@ -8,8 +8,10 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/hanlinai/trajrl-cli/internal/cli/clierr"
 	"github.com/hanlinai/trajrl-cli/internal/cli/keycmd"
 	"github.com/hanlinai/trajrl-cli/internal/cli/verifycmd"
+	"github.com/hanlinai/trajrl-cli/internal/ownerkey"
 )
 
 // verifyCmd is "verify NAME [-owner] [--json]": sbxverify, with the entry
@@ -50,8 +52,10 @@ func verifyAll(c *config, rest []string) int {
 			pass = true
 		}
 	}
-	if owner && !pass {
-		return fail(2, "verify --all -owner asks for no passphrase: give -passphrase-file FILE")
+	if owner && !pass && os.Getenv(ownerkey.PassphraseFileEnv) == "" {
+		// Each sandbox's check is a process of its own: it asks for no
+		// passphrase (exit status 3, as with no terminal).
+		return fail(clierr.NeedsOwner, "verify --all -owner asks for no passphrase: give -passphrase-file FILE or %s", ownerkey.PassphraseFileEnv)
 	}
 	out, err := entryOutput(c, "ls", "--json")
 	if err != nil {
