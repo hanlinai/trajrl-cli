@@ -815,6 +815,8 @@ func report(name string, res *ownerkey.Outcome, err error, o *opts) {
 			fmt.Fprintf(os.Stderr, "  Intel's rating: platform %s, TDX module %s, quoting enclave %s\n", q.PlatformTCB, q.ModuleTCBStatus, q.QETCBStatus)
 		}
 	}
+	// The refused quote's own values, for trajrl (refused.go): output only.
+	refusedQuote(os.Stderr, res, err)
 	if res.Released && res.Mode != proto.ModeTDX {
 		// Only a binary built with the tag "rehearsal" gets here.
 		fmt.Printf("%s (%s): NO QUOTE, NOT VERIFIED: the disk secret was sent WITHOUT ATTESTATION (evidence mode %s).\n", name, res.SandboxID, res.Mode)
