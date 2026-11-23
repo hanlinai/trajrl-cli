@@ -122,7 +122,15 @@ func sandboxSSH(c *config, name string, opts, remote []string, stdin io.Reader, 
 		return 0, err
 	}
 	f.Close()
-	argv := append(append([]string(nil), opts...), "-o", `UserKnownHostsFile="`+filepath.ToSlash(f.Name())+`"`, "-o", "StrictHostKeyChecking=yes")
+	argv := append([]string(nil), opts...)
+	// The key trajrl setup saved (-i, or the one it found): ssh would
+	// otherwise offer only its own defaults, which are another key when
+	// setup was given one, and the sandbox would refuse the login. Without
+	// a saved key (an SSH agent's), ssh picks as before.
+	if c.Identity != "" {
+		argv = append(argv, "-i", c.Identity)
+	}
+	argv = append(argv, "-o", `UserKnownHostsFile="`+filepath.ToSlash(f.Name())+`"`, "-o", "StrictHostKeyChecking=yes")
 	// Through this trajrl (trajrl proxy), whatever ssh's files say: an
 	// older setup's ProxyJump lines, or none, do not stand in the way.
 	if p, err := sshsetup.ProxyProgram(selfPath(), runtime.GOOS); err == nil {

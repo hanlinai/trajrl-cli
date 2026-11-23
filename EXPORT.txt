@@ -1,4 +1,4 @@
-Exported by release/export-owner-tools.sh from hanlinai/engy-trajrl-web, prototype/, commit b2ad21e7b4ef12ac290c63e98329480bdcd285bc.
+Exported by release/export-owner-tools.sh from hanlinai/engy-trajrl-web, prototype/, commit 5e995c8f0e3e3ce35b1b6c269284b15c2d8649a2.
 Module path: github.com/hanlinai/trajrl-cli (was tdxsandbox; import paths are the only change to the copied files).
 
 Test files not exported (they import packages of the service, not of the tools, or a test helper that does):
@@ -14,9 +14,9 @@ Test files not exported (they import packages of the service, not of the tools, 
   internal/cli/verifycmd/legacy_test.go
   internal/ownerkey/rehearsal_world_boot_test.go
   internal/sealedfile/sealedfile_test.go
+  internal/ownerkey/evidence_test.go
   internal/attest/ownerkey_image_test.go
   internal/attest/ownerkey_rtmr3_image_test.go
-  internal/ownerkey/evidence_test.go
   internal/ownerkey/keystatement_test.go
   internal/ownerkey/rename_test.go
   internal/ownerkey/sshpin_test.go

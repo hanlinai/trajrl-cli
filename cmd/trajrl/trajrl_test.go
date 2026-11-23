@@ -326,9 +326,9 @@ func TestExecKeySource(t *testing.T) {
 	}
 }
 
-// ssh NAME runs the system's ssh with the verified host key alone, through
-// this trajrl (ProxyCommand trajrl proxy, whatever ssh's files say);
-// without one it refuses.
+// ssh NAME runs the system's ssh with the verified host key alone and the
+// key setup saved (-i), through this trajrl (ProxyCommand trajrl proxy,
+// whatever ssh's files say); without a verified host key it refuses.
 func TestSSH(t *testing.T) {
 	bin := t.TempDir()
 	// A stand-in ssh: prints its arguments and the known-hosts file it was
@@ -340,7 +340,7 @@ func TestSSH(t *testing.T) {
 	if _, err := os.Stat("/bin/sh"); err != nil {
 		t.Skip("no /bin/sh for the stand-in ssh")
 	}
-	newHome(t, newFakeEntry(t, echo))
+	h := newHome(t, newFakeEntry(t, echo))
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 	const key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl"
 	if _, errs, code := trajrl(t, "", "ssh", "web"); code != 255 || !strings.Contains(errs, "run trajrl verify web") {
@@ -356,6 +356,10 @@ func TestSSH(t *testing.T) {
 	want := "arg StrictHostKeyChecking=yes\narg -o\narg ProxyCommand=" + self + " proxy %h %p\narg root@web.sbx.example\narg uname\narg -a\n"
 	if code != 3 || !strings.Contains(out, "web.sbx.example "+key+"\n") || !strings.HasSuffix(out, want) {
 		t.Fatalf("ssh web -- uname -a: %d %q %q", code, out, errs)
+	}	// The key setup saved goes to ssh, which would otherwise offer only its
+	// own default files.
+	if !strings.HasPrefix(out, "arg -i\narg "+h.keyFile+"\n") {
+		t.Fatalf("ssh web: the saved key was not passed first: %q", out)
 	}
 }
 
