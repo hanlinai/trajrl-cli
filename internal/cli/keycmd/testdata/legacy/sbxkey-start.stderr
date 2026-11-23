@@ -1,0 +1,43 @@
+usage:
+  sbxkey init         [-dir DIR] [-passphrase-file FILE]
+  sbxkey restore      [-dir DIR] [-passphrase-file FILE]
+  sbxkey backup-check [-dir DIR] [-passphrase-file FILE]
+  sbxkey start        [flags] NAME
+  sbxkey unlock       [flags] NAME
+  sbxkey new          [flags] NAME [flags for the entry point's new command...]
+  sbxkey rename       [-dir DIR] OLD NEW   after "rename OLD NEW" at the platform: your record follows
+  sbxkey known-hosts  [-dir DIR] [-domain D] [-ssh-known-hosts PATH] [-entry HOST:PORT -entry-key KEY [-i KEYFILE]] [NAME]
+                                           write the SSH host keys on your record where your ssh reads them,
+                                           without an unlock (for sandboxes made before sbxkey did this itself)
+  sbxkey keys list|add|remove|sync ...     your signed statement of SSH keys, which your sandboxes follow
+  sbxkey recovery-key init                 a recovery key, shown once, kept offline ("sbxkey keys" for more)
+
+flags of start, unlock and new:
+  -entry HOST:PORT -entry-key 'ssh-ed25519 AAAA...'   the platform's SSH entry point, its key pinned
+  -policy FILE (repeatable)                            the launch policies you accept (required)
+  -i KEYFILE                                           your SSH key (default: your SSH agent)
+  -authorized-keys FILE                                keys for root in a new sandbox (default: the key used for the entry)
+  -setup-script FILE                                   run once after the first boot
+  -image REGISTRY/REPO@sha256:...                      the sandbox's own image, by digest (new: also --image after NAME);
+                                                       its TD pulls and checks it at the first boot, over the base image
+  -registry-auth FILE                                  USER:PASSWORD for the image's registry, sent to the TD only
+  -env KEY=VALUE (repeatable)                          an environment variable for login shells and services,
+                                                       set at the first boot (a prelude to the setup script)
+  -accept-older N                                      accept an older disk at exactly boot N (a snapshot you restored)
+  -accept-newer N                                      accept a newer disk at exactly boot N (started from another machine of yours)
+  -first-boot                                          (start, unlock) accept a first boot: a blank disk is formatted
+  -accept-recovered                                    (start, unlock) unlock a copy recovered after its host failed
+                                                       without asking (the platform's notice is shown first)
+  -prompt TEXT | -prompt-file FILE                     (new) start a coding agent on this task at the first boot; its
+                                                       key is asked for (not shown), or read as one line from a pipe
+  -agent claude|codex|pi -agent-provider P -no-agent-key
+                                                       (new, with -prompt) the agent (default claude), pi's provider
+                                                       (default anthropic), or no key (add one later)
+  -known-host NAME (repeatable)                        host names to pin the SSH host key for (default: NAME
+                                                       and NAME.DOMAIN)
+  -domain D                                            (also rename) the platform's domain for sandbox names
+                                                       (default: asked of the entry point, and remembered)
+  -ssh-known-hosts PATH | none                         (also rename) the file your ssh reads your sandboxes' host
+                                                       keys from, written after every unlock (default:
+                                                       ~/.ssh/sbx_known_hosts, for sbxkey's own directory); none: no file
+  -dir DIR -passphrase-file FILE

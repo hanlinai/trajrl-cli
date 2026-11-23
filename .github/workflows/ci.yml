@@ -1,0 +1,65 @@
+# Every push and pull request: go vet, go test, and a reproducible build:
+# GoReleaser's snapshot build of the six binaries twice, which must give the
+# same bytes, and the same bytes again as release/build-owner-tools.sh (the
+# pinned Go image, by digest).
+#
+# This file is generated from the TrajRL monorepo (prototype/release/trajrl-repo/).
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: versions
+        id: v
+        run: |
+          . release/versions.env
+          echo "go=$GO_VERSION" >>"$GITHUB_OUTPUT"
+          echo "goreleaser=$GORELEASER_VERSION" >>"$GITHUB_OUTPUT"
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ steps.v.outputs.go }}
+          cache: false
+      - run: go vet ./...
+      - run: go test ./...
+      - uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
+        with:
+          distribution: goreleaser
+          version: ${{ steps.v.outputs.goreleaser }}
+          install-only: true
+      - name: build twice and compare
+        run: |
+          goreleaser build --snapshot --clean
+          (cd dist && LC_ALL=C sha256sum trajrl_*/trajrl* | LC_ALL=C sort -k2) >"$RUNNER_TEMP/b1"
+          goreleaser build --snapshot --clean
+          (cd dist && LC_ALL=C sha256sum trajrl_*/trajrl* | LC_ALL=C sort -k2) >"$RUNNER_TEMP/b2"
+          cat "$RUNNER_TEMP/b1"
+          test "$(wc -l <"$RUNNER_TEMP/b1")" = 6
+          diff "$RUNNER_TEMP/b1" "$RUNNER_TEMP/b2"
+          echo "two GoReleaser builds, same bytes"
+      - name: same bytes as release/build-owner-tools.sh
+        run: |
+          release/build-owner-tools.sh . "$RUNNER_TEMP/owner"
+          for d in dist/trajrl_*/; do
+            t=${d#dist/trajrl_}; t=${t%/}       # e.g. linux_amd64_v1, windows_arm64_v8.0
+            os=${t%%_*}; arch=${t#*_}; arch=${arch%%_*}
+            ext=; [ "$os" != windows ] || ext=.exe
+            cmp "$d/trajrl$ext" "$RUNNER_TEMP/owner/trajrl-$os-$arch$ext"
+          done
+          echo "GoReleaser and release/build-owner-tools.sh build the same bytes"

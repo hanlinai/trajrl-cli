@@ -1,0 +1,26 @@
+flag provided but not defined: -x
+Usage of sbxverify:
+  -addr string
+    	the sandbox's own SSH address, host:port (instead of -entry and -name)
+  -entry string
+    	the service's SSH entry point, host:port
+  -entry-key string
+    	the entry point's SSH host key as the service publishes it, e.g. 'ssh-ed25519 AAAA...'
+  -i string
+    	your SSH private key file (default: your SSH agent)
+  -id string
+    	the sandbox's ID (with -addr)
+  -json
+    	print the verdict and the verified quote's facts as one JSON object on stdout (the account for people goes to stderr); the exit status is the same
+  -name string
+    	the sandbox's name (with -entry)
+  -owner-key string
+    	the directory of your sbxkey key file: the sandbox must have been unlocked with your key
+  -passphrase-file string
+    	with -owner-key: a file only you can read holding the key file's passphrase (default: asked on the terminal)
+  -policy value
+    	the measurements you expect (JSON); several may be given, one must match in full
+  -record string
+    	after VERIFIED, record the host key the TD vouched for here, for sbxapi to pin ("" records nothing) (default "/nonexistent/.config/sbx/verified.json")
+  -timeout duration
+    	give up after this long (default 2m0s)

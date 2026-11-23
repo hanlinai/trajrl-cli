@@ -1,0 +1,20 @@
+usage:
+  sbxkey keys list   [entry flags] [-json]
+  sbxkey keys add    [entry flags] [-sign-with FILE] PUBKEY|FILE [-sandbox NAME]
+  sbxkey keys remove [entry flags] [-sign-with FILE] PUBKEY|FILE|SHA256:FP [-sandbox NAME]
+  sbxkey keys sync   [entry flags] [-ssh 'COMMAND'] [-domain D] NAME
+  sbxkey recovery-key init [entry flags] [-sign-with FILE] [-replace]
+
+entry flags: -entry HOST:PORT -entry-key 'ssh-ed25519 AAAA...' [-i KEYFILE] [-dir DIR]
+
+  add, remove  change your signed statement of keys: your login keys (they open the
+               entry point and every sandbox of yours), or with -sandbox NAME the keys
+               of that sandbox only (a colleague's). Signed with your key (-i, or the
+               one of your SSH agent that logged in), or with -sign-with FILE (your
+               recovery key, when every login key is lost). Your sandboxes apply it at
+               their next unlock, or now with: sbxkey keys sync NAME
+  sync         feeds the statement to NAME over your own SSH (default: ssh root@NAME.DOMAIN;
+               -ssh gives the command, which is run with "sandbox-keys apply" after it)
+  recovery-key init
+               makes a recovery key: shown ONCE, to be kept offline. It never logs in;
+               it signs a statement that gives you a new key after a lost laptop

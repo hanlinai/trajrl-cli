@@ -1,0 +1,24 @@
+trajrl  entry.example:2222  4 sandboxes
+web
+  verified here: no host key of it yet (v)
+
+Actions
+  u  trajrl unlock web
+  s  trajrl ssh web
+  v  trajrl verify web
+  x  trajrl stop web
+  r  trajrl restart web
+  d  trajrl rm web --yes  (once you type web)
+
+show web --json
+  name         web
+  id           sbx-1
+  state        waiting for its owner's key
+  size         small
+  vcpus        2
+  memory_gib   4
+  disk_gib     20
+  created      2026-11-18T09:30:00Z
+
+next: trajrl unlock web
+u s v x r d act  c copy  j k scroll  esc back  ? help  q quit

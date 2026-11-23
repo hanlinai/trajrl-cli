@@ -1,0 +1,19 @@
+{
+  "mrtd": "f9286d8bdd70ddd37d2affa7cd6e41deb7895a6bcdf0fc71d7182a3f6a5f06caf61b328fd5d168d54aa67e480a4ca2a3",
+  "rtmr0": "4820aa0debdfcb609ec15f8d3e60afe2358c9927e8d5749574f38db7450f69280573747dbcbdee230248e259aecac457",
+  "rtmr1": "290a206e8da99cb6e70b6cae21d765b2dc15fa7c79c65988ba2e3c26012ee2c2f842b7527995c74ea2638bf50d28a009",
+  "rtmr2": "4afd8cd15b38e3a6e8579e1c16bea5b23c87e0341318d2712671a27a4f4eb0e5e606b949431113b4b32a75cc310b97ec",
+  "td_attributes": "0000001000000000",
+  "xfam": "e702000000000000",
+  "bind_mrconfigid": true,
+  "allow_tdx_module_tcb": {
+    "status": "OutOfDate",
+    "min_tcb_date": "2025-05-14T00:00:00Z",
+    "advisory_ids": [
+      "INTEL-SA-01192",
+      "INTEL-SA-01245",
+      "INTEL-SA-01312"
+    ],
+    "reason": "Owner's decision, 2026-11-10: accept the out-of-date TDX module for prototype validation on the rented Alibaba ecs.ebmg8i.48xlarge (BIOS loads TDX module 1.5 SVN 10, Intel requires SVN 11; a tenant cannot update it). Validation only, not a production policy."
+  }
+}

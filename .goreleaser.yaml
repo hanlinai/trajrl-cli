@@ -1,0 +1,136 @@
+# GoReleaser: one tag (vX.Y.Z) makes the whole release of trajrl:
+#   - GitHub Release (a draft while the repository is private)
+#   - raw binaries trajrl-OS-ARCH[.exe], what install.sh / install.ps1 fetch
+#   - archives (tar.gz; zip on Windows), for Homebrew, Scoop and winget
+#   - SHA256SUMS over all of it
+#   - Homebrew formula -> hanlinai/homebrew-tap, Scoop manifest -> hanlinai/scoop-bucket
+#   - winget manifests (generated, not submitted while the repository is private)
+#   - .deb and .rpm
+#
+# The binaries are built like release/build-owner-tools.sh builds them
+# (CGO_ENABLED=0, -trimpath, -buildvcs=false, -ldflags '-s -w -buildid=', no
+# build tags, Go GO_VERSION from release/versions.env), so the two give the
+# same bytes. trajrl's version is a constant in cmd/trajrl/main.go, so
+# nothing is injected with -X.
+#
+# Secrets (in this repository): TAP_GITHUB_TOKEN, a fine-grained token with
+# contents write on hanlinai/homebrew-tap and hanlinai/scoop-bucket.
+#
+# This file is generated from the TrajRL monorepo (prototype/release/trajrl-repo/).
+version: 2
+
+project_name: trajrl
+
+builds:
+  - id: trajrl
+    main: ./cmd/trajrl
+    binary: trajrl
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+      - -buildvcs=false
+    ldflags:
+      - -s -w -buildid=
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  # For the package managers.
+  - id: default
+    ids: [trajrl]
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - README.md
+      - LICENSE
+  # The bare binaries, under the names the install scripts fetch:
+  # trajrl-linux-amd64, ..., trajrl-windows-arm64.exe.
+  - id: binary
+    ids: [trajrl]
+    formats: [binary]
+    name_template: "{{ .ProjectName }}-{{ .Os }}-{{ .Arch }}"
+
+checksum:
+  name_template: SHA256SUMS
+  algorithm: sha256
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-snapshot"
+
+changelog:
+  sort: asc
+
+release:
+  github:
+    owner: hanlinai
+    name: trajrl-cli
+  # A draft while the repository is private: publish it by hand. Set to
+  # false when the repository is public.
+  draft: true
+  prerelease: auto
+
+brews:
+  - name: trajrl
+    ids: [default]
+    repository:
+      owner: hanlinai
+      name: homebrew-tap
+      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
+    directory: Formula
+    homepage: https://github.com/hanlinai/trajrl-cli
+    description: Owner's command line for TrajRL sandboxes; verifies Intel TDX attestation
+    license: "TBD (#130)"
+    install: |
+      bin.install "trajrl"
+    test: |
+      system "#{bin}/trajrl", "version"
+
+scoops:
+  - name: trajrl
+    ids: [default]
+    repository:
+      owner: hanlinai
+      name: scoop-bucket
+      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
+    homepage: https://github.com/hanlinai/trajrl-cli
+    description: Owner's command line for TrajRL sandboxes; verifies Intel TDX attestation
+    license: "TBD (#130)"
+
+winget:
+  - name: trajrl
+    ids: [default]
+    publisher: TrajRL
+    short_description: Owner's command line for TrajRL sandboxes
+    license: "TBD (#130)"
+    homepage: https://github.com/hanlinai/trajrl-cli
+    publisher_url: https://sandbox.trajrl.com
+    package_identifier: TrajRL.trajrl
+    # enable when the repo is public (winget-pkgs needs public download URLs)
+    skip_upload: true
+    repository:
+      owner: hanlinai
+      name: winget-pkgs
+      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
+
+nfpms:
+  - id: packages
+    ids: [trajrl]
+    package_name: trajrl
+    file_name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats: [deb, rpm]
+    bindir: /usr/bin
+    # No contact address chosen yet: the issue tracker stands in.
+    maintainer: TrajRL (https://github.com/hanlinai/trajrl-cli/issues)
+    vendor: TrajRL
+    homepage: https://github.com/hanlinai/trajrl-cli
+    description: |-
+      Owner's command line for TrajRL sandboxes.
+      Verifies a sandbox's Intel TDX attestation, holds its disk key and
+      reaches it over SSH with the host key verified locally.
+    license: "TBD (#130)"
+    mtime: "{{ .CommitDate }}"

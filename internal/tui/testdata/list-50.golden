@@ -1,0 +1,24 @@
+trajrl  entry.example:2222  4 sandboxes
+  NAME STATE
+› web  waiting for key
+  api  running
+  db   running
+  old  stopped
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+next: trajrl unlock web
+enter details  n new  u s v x r d act  c copy  / …

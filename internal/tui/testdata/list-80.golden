@@ -1,0 +1,24 @@
+trajrl  entry.example:2222  4 sandboxes
+  NAME STATE           SIZE    NEEDS YOU VERIFIED URL
+› web  waiting for key small   u unlock  no       web.sbx.example
+  api  running         medium            yes      api.sbx.example
+  db   running         large             no       db.sbx.example
+  old  stopped         small             no
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+next: trajrl unlock web
+enter details  n new  u s v x r d act  c copy  / filter  ? help  q quit

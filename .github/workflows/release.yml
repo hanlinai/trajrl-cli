@@ -1,0 +1,54 @@
+# A tag vX.Y.Z makes the release with GoReleaser (.goreleaser.yaml): the
+# GitHub Release (a draft while the repository is private), the Homebrew
+# formula in hanlinai/homebrew-tap, the Scoop manifest in hanlinai/scoop-bucket,
+# winget manifests (not submitted yet), .deb and .rpm.
+#
+# Tags are pushed by the TrajRL monorepo's cli-sync workflow (for its tag
+# sbx-vX.Y.Z), or by hand.
+#
+# Secrets: GITHUB_TOKEN (automatic) and TAP_GITHUB_TOKEN, a fine-grained token
+# with contents write on hanlinai/homebrew-tap and hanlinai/scoop-bucket.
+#
+# This file is generated from the TrajRL monorepo (prototype/release/trajrl-repo/).
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  goreleaser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      # The pinned versions: Go (the one in the image
+      # release/build-owner-tools.sh uses) and GoReleaser.
+      - name: versions
+        id: v
+        run: |
+          . release/versions.env
+          echo "go=$GO_VERSION" >>"$GITHUB_OUTPUT"
+          echo "goreleaser=$GORELEASER_VERSION" >>"$GITHUB_OUTPUT"
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ steps.v.outputs.go }}
+          cache: false
+      - run: go vet ./... && go test ./...
+        env:
+          GOTOOLCHAIN: local
+      - uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
+        with:
+          distribution: goreleaser
+          version: ${{ steps.v.outputs.goreleaser }}
+          args: release --clean
+        env:
+          GOTOOLCHAIN: local
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}

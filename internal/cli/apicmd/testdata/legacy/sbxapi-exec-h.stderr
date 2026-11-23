@@ -1,0 +1,19 @@
+Usage of exec:
+  -connect string
+    	where to connect, host:port (default: the sandbox's host name, port 443: the web router)
+  -cwd string
+    	working directory (default /root)
+  -e value
+    	an environment variable NAME=VALUE (repeat)
+  -host string
+    	the TLS server name, NAME-ACCOUNT.DOMAIN (default: from sbxverify's record, or NAME if it has a dot)
+  -i string
+    	your SSH private key, Ed25519 (default: your SSH agent's Ed25519 key, else ~/.ssh/id_ed25519)
+  -pin string
+    	the sandbox's SSH host key, 'ssh-ed25519 AAAA...' (default: the one sbxverify recorded)
+  -pins string
+    	sbxverify's record of the sandboxes it verified (default "/nonexistent/.config/sbx/verified.json")
+  -stdin
+    	send this program's standard input to the command (read whole, before it starts)
+  -timeout int
+    	seconds the command may run, at most 300 (default 60)

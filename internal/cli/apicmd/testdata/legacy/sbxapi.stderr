@@ -1,0 +1,5 @@
+usage:
+  sbxapi exec [flags] NAME -- COMMAND [ARG...]
+  sbxapi cp [flags] LOCAL NAME:/PATH
+  sbxapi cp [flags] NAME:/PATH LOCAL
+flags:

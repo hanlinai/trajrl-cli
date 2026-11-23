@@ -1,0 +1,35 @@
+Exported by release/export-owner-tools.sh from hanlinai/engy-trajrl-web, prototype/, commit 6719cc348ee433aa3d1402c844974a418da6675b.
+Module path: github.com/hanlinai/trajrl-cli (was tdxsandbox; import paths are the only change to the copied files).
+
+Test files not exported (they import packages of the service, not of the tools, or a test helper that does):
+  cmd/trajrl/backup_test.go
+  cmd/trajrl/control_test.go
+  internal/attest/broker_e2e_test.go
+  internal/attest/broker_unseal_e2e_test.go
+  internal/attest/custodian_e2e_test.go
+  internal/attest/ownerkey_e2e_test.go
+  internal/attest/ownerkey_firstboot_test.go
+  internal/cli/apicmd/legacy_test.go
+  internal/cli/keycmd/legacy_test.go
+  internal/cli/verifycmd/legacy_test.go
+  internal/ownerkey/rehearsal_world_boot_test.go
+  internal/sealedfile/sealedfile_test.go
+  internal/ownerkey/evidence_test.go
+  internal/attest/ownerkey_image_test.go
+  internal/attest/ownerkey_rtmr3_image_test.go
+  internal/ownerkey/keystatement_test.go
+  internal/ownerkey/rename_test.go
+  internal/ownerkey/sshpin_test.go
+  internal/ownerkey/webnames_test.go
+  internal/ownerkey/evidence_rehearsal_test.go
+
+Test data copied from elsewhere in the repository, at the same relative path:
+  docs/evidence/alibaba-ebmg8i/launch-policy-with-tcb-exception.json
+  docs/evidence/alibaba-ebmg8i/launch-policy.json
+  examples/prompt-setup.sh
+
+Files of the validation-only TCB exception (build tag tcbexception) not exported: no released tool has it:
+  internal/attest/broker_exception_e2e_test.go
+  internal/attest/exception_on.go
+  internal/attest/exception_on_test.go
+  internal/attest/export_exception_on_test.go
