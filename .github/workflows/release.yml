@@ -12,7 +12,7 @@
 #
 # Secrets: only GITHUB_TOKEN (automatic). Variables: PYPI_PUBLISH.
 #
-# This file is generated from the TrajRL monorepo (prototype/release/trajrl-repo/).
+# This file is generated from hanlinai/trajrl-api (release/trajrl-repo/).
 name: release
 
 on:

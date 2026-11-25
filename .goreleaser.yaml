@@ -16,7 +16,7 @@
 # (bucket/) are written to this same repository with the workflow's own
 # GITHUB_TOKEN.
 #
-# This file is generated from the TrajRL monorepo (prototype/release/trajrl-repo/).
+# This file is generated from hanlinai/trajrl-api (release/trajrl-repo/).
 version: 2
 
 project_name: trajrl

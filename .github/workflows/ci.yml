@@ -3,7 +3,7 @@
 # same bytes, and the same bytes again as release/build-owner-tools.sh (the
 # pinned Go image, by digest).
 #
-# This file is generated from the TrajRL monorepo (prototype/release/trajrl-repo/).
+# This file is generated from hanlinai/trajrl-api (release/trajrl-repo/).
 name: ci
 
 on:

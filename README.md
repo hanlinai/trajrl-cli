@@ -126,7 +126,7 @@ quote verifier, with the report data computed as `internal/proto` `UserReportDat
 ### RTMR3: two extensions
 
 `RTMR3` is zero when the disk secret is released, and the initrd extends it twice before the
-root is mounted ([`trusted-boot.md`](https://github.com/hanlinai/engy-trajrl-web/blob/console/prototype/docs/trusted-boot.md), #112):
+root is mounted ([`trusted-boot.md`](https://github.com/hanlinai/trajrl-api/blob/main/docs/trusted-boot.md), #112):
 
 1. **The unlock.** When the secret arrives: `proto.RTMR3OwnerUnlock(secret)`, a commitment to the
    disk secret, if the owner's `trajrl` unlocked it; `proto.RTMR3BootDone()`, a fixed string, if
@@ -203,9 +203,9 @@ status is the same.
 
 - **Who else can obtain the sandbox's disk key.** The key broker holds it, and the broker runs on
   an ordinary machine of the service's
-  ([issue #22](https://github.com/hanlinai/engy-trajrl-web/issues/22)). A verified sandbox is one
+  ([issue #22](https://github.com/hanlinai/trajrl-api/issues/22)). A verified sandbox is one
   nobody can look into while it runs; its disk at rest is as private as the broker is.
-- That the disk has not been rolled back to an older state ([`threat-model.md`](https://github.com/hanlinai/engy-trajrl-web/blob/console/prototype/docs/threat-model.md)).
+- That the disk has not been rolled back to an older state ([`threat-model.md`](https://github.com/hanlinai/trajrl-api/blob/main/docs/threat-model.md)).
 - Anything about what the owner, as root, has installed since.
 - Anything about a sandbox that is not running.
 

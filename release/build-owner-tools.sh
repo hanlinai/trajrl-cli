@@ -4,7 +4,7 @@
 #   release/build-owner-tools.sh SRCDIR OUTDIR
 #
 # SRCDIR is a tree with cmd/trajrl: the exported module
-# (release/export-owner-tools.sh), the public repository, or prototype/ itself.
+# (release/export-owner-tools.sh), the public repository, or this repository itself.
 # OUTDIR gets six binaries, trajrl-OS-ARCH for linux and darwin on amd64 and
 # arm64, and trajrl-windows-amd64.exe and trajrl-windows-arm64.exe, and
 # SHA256SUMS. Two runs on the same source give the same bytes, on any machine
