@@ -1,19 +1,19 @@
 {
-    "version": "0.3.0",
+    "version": "0.4.0",
     "architecture": {
         "64bit": {
-            "url": "https://github.com/hanlinai/trajrl-cli/releases/download/v0.3.0/trajrl_0.3.0_windows_amd64.zip",
+            "url": "https://github.com/hanlinai/trajrl-cli/releases/download/v0.4.0/trajrl_0.4.0_windows_amd64.zip",
             "bin": [
                 "trajrl.exe"
             ],
-            "hash": "936c4cddac279c28aff58488b067d2c884aac94ed37386a0e928b042b6fe404a"
+            "hash": "0fb6ffdc0594d939b43a1d14ba603423fbe89cfe3f053907806804f7bfeb5a87"
         },
         "arm64": {
-            "url": "https://github.com/hanlinai/trajrl-cli/releases/download/v0.3.0/trajrl_0.3.0_windows_arm64.zip",
+            "url": "https://github.com/hanlinai/trajrl-cli/releases/download/v0.4.0/trajrl_0.4.0_windows_arm64.zip",
             "bin": [
                 "trajrl.exe"
             ],
-            "hash": "f3265f6184e7945af08cf46916e291720ce139ee4f3e79d37fff9ee51517f362"
+            "hash": "122780a00ff92a1ec70e67f639da675cb71a8ef9bacd701903b86a08bbf9b9db"
         }
     },
     "homepage": "https://github.com/hanlinai/trajrl-cli",
