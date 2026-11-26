@@ -1,4 +1,4 @@
-# A tag vX.Y.Z makes the release with GoReleaser (.goreleaser.yaml): the
+# Run by hand on a tag vX.Y.Z, it makes the release with GoReleaser (.goreleaser.yaml): the
 # GitHub Release, the Homebrew formula (Formula/) and the Scoop manifest
 # (bucket/) in this repository, .deb and .rpm. Then, if the repository
 # variable PYPI_PUBLISH is true, the pypi job builds the Python SDK
@@ -7,17 +7,18 @@
 # (OIDC: no token; the publisher registered on PyPI for this repository,
 # release.yml and the environment pypi).
 #
-# Tags are pushed by the TrajRL monorepo's cli-sync workflow (for its tag
-# sbx-vX.Y.Z), or by hand.
+# Releases are normally made on the releaser's machine by the TrajRL
+# monorepo's release/sync-cli.sh, which does what this file does.
 #
 # Secrets: only GITHUB_TOKEN (automatic). Variables: PYPI_PUBLISH.
 #
 # This file is generated from hanlinai/trajrl-api (release/trajrl-repo/).
 name: release
 
+# By hand only (on a tag's ref): releases are published from the releaser's
+# machine by release/sync-cli.sh in hanlinai/trajrl-api; no tag starts a run.
 on:
-  push:
-    tags: ["v*"]
+  workflow_dispatch:
 
 permissions:
   contents: write

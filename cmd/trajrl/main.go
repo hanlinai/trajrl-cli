@@ -30,7 +30,7 @@ import (
 )
 
 // version is trajrl's version, set here in the source (no -X at build).
-const version = "0.3.0"
+const version = "0.4.0"
 
 const prog = "trajrl"
 
@@ -38,6 +38,7 @@ func main() { os.Exit(run(os.Args[1:])) }
 
 // handlers are the commands of the table, by name.
 var handlers = map[string]func(args []string) int{
+	"auth":         authCmd,
 	"setup":        setupCmd,
 	"key":          keyCmd,
 	"keys":         keysCmd,
@@ -185,6 +186,9 @@ func keyCmd(args []string) int {
 // bootCmd is new, start, unlock and known-hosts: sbxkey's; start and
 // unlock take their flags after NAME too.
 func bootCmd(args []string) int {
+	if args[0] == "new" {
+		args = newFirst(args)
+	}
 	o := keyOptions(loadConfigOrEmpty(), args[0] == "start" || args[0] == "unlock")
 	// --json, before NAME or after it (new: among the platform's flags,
 	// taken off them there), is trajrl's: one object on stdout.

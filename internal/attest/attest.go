@@ -170,6 +170,7 @@ type Result struct {
 	Policy string `json:"policy,omitempty"`
 	// FMSPC is the platform family the collateral was issued for.
 	FMSPC string `json:"fmspc,omitempty"`
+	HwID  string `json:"hw_id,omitempty"`
 	// TCBException is set when the verdict relied on an experimental TCB
 	// exception; it names what was tolerated and why.
 	TCBException string `json:"tcb_exception,omitempty"`
@@ -469,6 +470,7 @@ func (v *TDX) authenticate(ctx context.Context, quote any, body tdBody, res *Res
 		return err
 	}
 	res.PlatformTCB = upToDate
+	res.HwID = hwID(quote)
 	lvl, info, err := rate(quote, body, o, c, res)
 	if err != nil {
 		return err
@@ -615,6 +617,7 @@ func Inspect(ctx context.Context, raw []byte) (*Result, error) {
 	if err := verify.TdxQuoteContext(ctx, quote, o); err != nil {
 		return res, fmt.Errorf("quote authenticity: %w", err)
 	}
+	res.HwID = hwID(quote)
 	lvl, info, rateErr := rate(quote, body, o, c, res)
 	var moduleErr error
 	if rateErr == nil {
@@ -631,4 +634,26 @@ func Inspect(ctx context.Context, raw []byte) (*Result, error) {
 		return res, fmt.Errorf("authentic, but the broker would refuse it: %w", err)
 	}
 	return res, nil
+}
+
+const hwIDDomain = "trajrl-hw-v1\x00"
+
+func hwID(quote any) string {
+	chain, err := verify.ExtractChainFromQuote(quote)
+	if err != nil || chain.PCKCertificate == nil {
+		return ""
+	}
+	ext, err := pcs.PckCertificateExtensions(chain.PCKCertificate)
+	if err != nil {
+		return ""
+	}
+	id := ext.PIID
+	if strings.Trim(id, "0") == "" {
+		id = ext.PPID
+	}
+	if strings.Trim(id, "0") == "" {
+		return ""
+	}
+	sum := sha256.Sum256([]byte(hwIDDomain + strings.ToLower(id)))
+	return hex.EncodeToString(sum[:])
 }

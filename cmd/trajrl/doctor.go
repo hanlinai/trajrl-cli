@@ -82,7 +82,7 @@ func doctor() doctorReport {
 	add := func(name, status, msg, fix string) {
 		rep.Checks = append(rep.Checks, check{Name: name, Status: status, Message: msg, Fix: fix})
 	}
-	setup := prog + " setup -entry HOST:PORT -entry-key 'ssh-ed25519 AAAA...' (the line on the website's Settings page)"
+	setup := prog + " auth login"
 
 	// The configuration.
 	c, err := loadConfig()
@@ -144,10 +144,10 @@ func doctor() doctorReport {
 		switch {
 		case errors.Is(err, errNoAnswer):
 			add("entry", "fail", fmt.Sprintf("%s did not answer within %s", c.Entry, doctorTimeout),
-				"check your network; if your SSH key is not linked to an account, the entry point waits for it: link it on the website, or "+prog+" register NAME --invite CODE")
+				"check your network; if your SSH key is not linked to an account, the entry point waits for it: sign in with "+prog+" auth login, or "+prog+" register NAME --invite CODE")
 		case err != nil && strings.Contains(said, "host key mismatch"):
 			add("entry", "fail", c.Entry+" answered with another host key than the one pinned in "+configPath(),
-				"compare with the entry point's key on the website's Settings page; if it changed there, run "+setup)
+				"compare with the entry point's key on the website's Settings page; if it changed there, run "+prog+" auth login -site URL, URL the website you sign in at")
 		case err != nil:
 			add("entry", "fail", oneLine(err.Error()), "check the entry point's address and your SSH key, then "+prog+" setup again")
 		default:

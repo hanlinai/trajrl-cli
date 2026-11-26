@@ -115,7 +115,7 @@ func TestStatus(t *testing.T) {
 	os.Remove(configPath())
 	out, _, code = trajrl(t, "", "status", "--json")
 	st = tui.Status{}
-	if json.Unmarshal([]byte(out), &st); code != 1 || st.Configured || !strings.Contains(st.Message, "trajrl setup -entry") {
+	if json.Unmarshal([]byte(out), &st); code != 1 || st.Configured || !strings.Contains(st.Message, "trajrl auth login") {
 		t.Errorf("not set up: %d %s", code, out)
 	}
 }

@@ -15,10 +15,11 @@ type Command struct {
 // tests (tests/sbx.test.mjs), read it: keep one entry a line.
 var Commands = []Command{
 	{Name: "setup", Usage: "-entry HOST:PORT -entry-key 'ssh-ed25519 AAAA...' [-i KEYFILE] [-ssh-dir DIR] | setup --remove [-ssh-dir DIR]", Help: "set this machine up: the entry point, its key pinned, for trajrl and for your ssh"},
+	{Name: "auth", Usage: "[login] [-no-browser] [-site URL] [-i KEYFILE] [-ssh-dir DIR] | auth status [--json]", Help: "sign in: opens the website in your browser (elsewhere, a page and a one-time code to enter on any device), then sets this machine up"},
 	{Name: "key", Usage: "init|restore|backup-check [-dir DIR] [-passphrase-file FILE]", Help: "your key file: make it, rebuild it from the recovery phrase, check your written phrase"},
 	{Name: "keys", Usage: "list|add|remove|sync NAME ... | sync --all | status [--json]", Help: "your signed statement of SSH keys, which your sandboxes follow; sync --all feeds it to every running sandbox, status shows which applied it"},
 	{Name: "recovery-key", Usage: "init [-sign-with FILE] [-replace]", Help: "a recovery key, shown once, kept offline"},
-	{Name: "new", Usage: "[flags] NAME [flags of the entry point's new ...] [--json]", Help: "create NAME, then verify its TD and unlock its first boot"},
+	{Name: "new", Usage: "[flags] NAME [flags of the entry point's new ...] [-y] [--json]", Help: "create NAME, then verify its TD and unlock its first boot; on a terminal it first asks what is missing (the image, a disk key, the published launch policies), Enter taking the default; -y takes the defaults"},
 	{Name: "start", Usage: "NAME [flags] [--json]", Help: "verify NAME's TD and unlock its boot (the platform starts it if stopped)"},
 	{Name: "unlock", Usage: "NAME [flags] [--json]", Help: "verify NAME's TD and unlock the boot that waits for your key"},
 	{Name: "known-hosts", Usage: "[NAME] | --share NAME | --import 'LINE'", Help: "write the SSH host keys on your record where your ssh reads them; --share prints NAME's for a colleague, --import records the one an owner gave you"},

@@ -118,7 +118,7 @@ func setupCmd(args []string) int {
 		} else {
 			fmt.Fprintf(os.Stderr, "%s: the entry point does not know your key yet (%v).\n", prog, err)
 		}
-		fmt.Fprintf(os.Stderr, "Make an account for this key first: %s register NAME --invite CODE (or link the key to your account on the website), then run %s setup again.\n", prog, prog)
+		fmt.Fprintf(os.Stderr, "Sign this key in to your website account first: %s auth login (or make an account that is this key alone: %s register NAME --invite CODE), then run %s setup again.\n", prog, prog, prog)
 		return 1
 	}
 	fmt.Printf("Your account there: %s\n", strings.TrimSpace(string(who)))

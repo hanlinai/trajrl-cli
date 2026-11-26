@@ -6,10 +6,9 @@
 # This file is generated from hanlinai/trajrl-api (release/trajrl-repo/).
 name: ci
 
+# By hand only: releases are checked and built on the releaser's machine
+# (release/sync-cli.sh in hanlinai/trajrl-api); no push starts a run.
 on:
-  push:
-    branches: [main]
-  pull_request:
   workflow_dispatch:
 
 permissions:

@@ -15,7 +15,7 @@ var ownGroups = []struct {
 	Title string
 	Names []string
 }{
-	{"Start here", []string{"setup", "doctor", "status", "tui"}},
+	{"Start here", []string{"auth", "setup", "doctor", "status", "tui"}},
 	{"Sandboxes, checked on this machine", []string{"new", "start", "unlock", "verify", "ssh", "proxy", "exec", "cp", "rename", "known-hosts"}},
 	{"Your keys and the images you accept", []string{"key", "keys", "recovery-key", "policy"}},
 	{"Sharing and backups", []string{"share", "backup"}},
@@ -40,8 +40,8 @@ func helpLine(w io.Writer, words, usage, what string) {
 // it forwards, grouped. It asks nothing of the entry point.
 func help(w io.Writer) {
 	fmt.Fprintf(w, "usage: %s COMMAND [ARGS...]\n\n", prog)
-	fmt.Fprintf(w, "%s is the client of your TrajRL sandboxes. Run %s setup once (the line on the website's\n"+
-		"Settings page), then any command below.\n", prog, prog)
+	fmt.Fprintf(w, "%s is the client of your TrajRL sandboxes. Sign in once with %s auth login, then create\n"+
+		"one with %s new NAME.\n", prog, prog, prog)
 	for _, g := range ownGroups {
 		fmt.Fprintf(w, "\n%s\n", g.Title)
 		for _, name := range g.Names {

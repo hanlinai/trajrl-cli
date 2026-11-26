@@ -92,7 +92,7 @@ func noKey(locked []string) error {
 func loadConfig() (*config, error) {
 	b, err := os.ReadFile(configPath())
 	if errors.Is(err, os.ErrNotExist) {
-		return nil, fmt.Errorf("this machine is not set up: run %s setup -entry HOST:PORT -entry-key 'ssh-ed25519 AAAA...' (the line on the website's Settings page)", prog)
+		return nil, fmt.Errorf("this machine is not set up: run %s auth login", prog)
 	}
 	if err != nil {
 		return nil, err

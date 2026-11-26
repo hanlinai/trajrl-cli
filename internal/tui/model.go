@@ -803,11 +803,11 @@ func (m *Model) firstUse() []string {
 	for _, para := range []string{
 		"Welcome to " + p + ".",
 		"",
-		"This machine is not set up yet. On the website, open Settings and copy the line under \"Entry point\". It looks like:",
+		"This machine is not set up yet. Quit and sign in, in a terminal:",
 		"",
-		"  " + p + " setup -entry HOST:PORT -entry-key 'ssh-ed25519 AAAA...'",
+		"  " + p + " auth login",
 		"",
-		"Paste it below and press enter: " + p + " runs it, then shows your sandboxes.",
+		"Or paste the line under \"Entry point\" on the website's Settings page below and press enter.",
 	} {
 		if strings.HasPrefix(para, "  ") {
 			out = append(out, cut(para, m.w))

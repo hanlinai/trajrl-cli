@@ -1,14 +1,14 @@
 trajrl  not set up
 Welcome to trajrl.
 
-This machine is not set up yet. On the website,
-open Settings and copy the line under "Entry
-point". It looks like:
+This machine is not set up yet. Quit and sign in,
+in a terminal:
 
-  trajrl setup -entry HOST:PORT -entry-key 'ssh-e…
+  trajrl auth login
 
-Paste it below and press enter: trajrl runs it,
-then shows your sandboxes.
+Or paste the line under "Entry point" on the
+website's Settings page below and press enter.
+
 
 
 

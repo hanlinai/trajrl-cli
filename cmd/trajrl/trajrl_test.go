@@ -125,7 +125,7 @@ func TestForward(t *testing.T) {
 	}
 	// Not set up: 255, and how to set up.
 	os.Remove(configPath())
-	if _, errs, code := trajrl(t, "", "ls"); code != 255 || !strings.Contains(errs, "trajrl setup -entry HOST:PORT") {
+	if _, errs, code := trajrl(t, "", "ls"); code != 255 || !strings.Contains(errs, "trajrl auth login") {
 		t.Errorf("not set up: %d %q", code, errs)
 	}
 }
