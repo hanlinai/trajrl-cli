@@ -23,7 +23,7 @@ var Commands = []Command{
 	{Name: "start", Usage: "NAME [flags] [--json]", Help: "verify NAME's TD and unlock its boot (the platform starts it if stopped)"},
 	{Name: "unlock", Usage: "NAME [flags] [--json]", Help: "verify NAME's TD and unlock the boot that waits for your key"},
 	{Name: "known-hosts", Usage: "[NAME] | --share NAME | --import 'LINE'", Help: "write the SSH host keys on your record where your ssh reads them; --share prints NAME's for a colleague, --import records the one an owner gave you"},
-	{Name: "rename", Usage: "OLD NEW", Help: "rename a sandbox at the platform (if it is not yet) and on your record"},
+	{Name: "rename", Usage: "[-domain D] [-ssh-known-hosts PATH] OLD NEW", Help: "rename a sandbox at the platform (if it is not yet) and on your record"},
 	{Name: "verify", Usage: "NAME [-owner] [--json] | verify --all [-owner -passphrase-file FILE]", Help: "check a running sandbox from here: Intel's signature, the image you expect, your SSH session ends in it"},
 	{Name: "ssh", Usage: "NAME [-- ARGS...]", Help: "log in to NAME with your ssh, accepting only the host key verified on this machine"},
 	{Name: "proxy", Usage: "HOST PORT", Help: "ssh's ProxyCommand (setup installs it): carries one SSH connection to HOST (NAME.DOMAIN) through the entry point; prints nothing else"},

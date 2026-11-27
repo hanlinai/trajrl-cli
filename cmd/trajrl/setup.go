@@ -189,10 +189,15 @@ func legacyPin(c *config) string {
 	return c.EntryName + " " + c.EntryKey
 }
 
+var proxySelf string
+
 // selfPath is the path of this trajrl for ssh's ProxyCommand: the one
 // found on PATH where that is this same program (a link a package manager
 // keeps across upgrades), otherwise the program's own path.
 func selfPath() string {
+	if proxySelf != "" {
+		return proxySelf
+	}
 	exe, err := os.Executable()
 	if err != nil {
 		exe = prog

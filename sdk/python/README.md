@@ -4,8 +4,10 @@ The Python SDK for TrajRL's TDX sandboxes. It runs on your own machine and drive
 command line there, through its `--json` interface. You import it as `trajrl`.
 
 ```
-pip install trajrl-sdk
+pip install "git+https://github.com/hanlinai/trajrl-cli#subdirectory=sdk/python"
 ```
+
+It is not on PyPI yet.
 
 Pure Python, no dependencies, Python 3.9 or later. The one thing it needs is `trajrl`.
 

@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"net/url"
@@ -45,6 +46,12 @@ func verifiedHostKey(name string) (string, error) {
 		return r.SSHHostKey, nil
 	}
 	return "", fmt.Errorf("no host key of %s was verified on this machine: run %s verify %s first", name, prog, name)
+}
+
+var errNoQuote = errors.New("they are not available for a sandbox that gives no quote")
+
+func noQuote(name string) error {
+	return fmt.Errorf("your record of %s was made without a quote (a rehearsal): exec, cp and share ssh need a host key a TD's quote attested, and %s gave no quote (an emulated sandbox, as on stage, has none to give), so %s verify cannot record one: %w", name, name, prog, errNoQuote)
 }
 
 // rehearsalHostKey is set only in a binary built with the tag "rehearsal"
@@ -172,7 +179,7 @@ func apiFallback(c *config) func(name string) (string, string, error) {
 		case r.SSHHostKey == "":
 			return "", "", fmt.Errorf("your record has no host key of %s (its first boot was confirmed elsewhere): %s", name, verify)
 		case r.Policy == "":
-			return "", "", fmt.Errorf("your record of %s was made without a quote (a rehearsal): %s", name, verify)
+			return "", "", noQuote(name)
 		}
 		out, err := entryOutput(c, "show", name, "--json")
 		if err != nil {
@@ -223,10 +230,22 @@ func waitsForKey(c *config) func(name string) error {
 // record has as OLD (renamed at the platform already, say on the website),
 // only your record follows; otherwise the platform renames it first.
 func renameCmd(args []string) int {
-	if len(args) != 3 {
-		return fail(2, "usage: %s rename OLD NEW", prog)
+	fs := flag.NewFlagSet(prog+" rename", flag.ContinueOnError)
+	fs.String("domain", "", "the platform's domain for sandbox names (default: asked of the entry point, and remembered)")
+	fs.String("ssh-known-hosts", "", "the file your ssh reads your sandboxes' host keys from; 'none': write none")
+	if err := fs.Parse(args[1:]); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return 0
+		}
+		return 2
 	}
-	old, name := args[1], args[2]
+	if fs.NArg() != 2 {
+		return fail(2, "usage: %s rename [-domain D] [-ssh-known-hosts PATH] OLD NEW", prog)
+	}
+	old, name := fs.Arg(0), fs.Arg(1)
+	key := []string{"rename"}
+	fs.Visit(func(f *flag.Flag) { key = append(key, "-"+f.Name, f.Value.String()) })
+	key = append(key, old, name)
 	c, err := loadConfig()
 	if err != nil {
 		return fail(255, "%v", err)
@@ -253,6 +272,6 @@ func renameCmd(args []string) int {
 	if r == nil {
 		return 0
 	}
-	keycmd.MainWith([]string{"rename", old, name}, keyOptions(c, false))
+	keycmd.MainWith(key, keyOptions(c, false))
 	return 0
 }

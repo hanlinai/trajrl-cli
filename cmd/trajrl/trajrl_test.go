@@ -223,7 +223,8 @@ func TestRename(t *testing.T) {
 		})
 		newHome(t, e)
 		putRecord(t, ownerkey.Record{ID: idA, Name: "a"})
-		out, errs, code := trajrl(t, "", "rename", "a", "b")
+		mirror := filepath.Join(t.TempDir(), "sbx_known_hosts")
+		out, errs, code := trajrl(t, "", "rename", "-ssh-known-hosts", mirror, "a", "b")
 		if code != 0 || !strings.Contains(out, "a ("+idA+") is b in your record now") {
 			t.Fatalf("already %v: %d %q %q", already, code, out, errs)
 		}
@@ -238,6 +239,14 @@ func TestRename(t *testing.T) {
 }
 
 // The old programs as they are: what they printed before their code moved.
+var rehearsalExtra = strings.NewReplacer(
+	"\nREHEARSAL BUILD (-tags rehearsal), NOT FOR ANY REAL USE:\n"+
+		"  -dev-insecure-rehearsal                              (start, unlock, new) give a TD that offers no quote\n"+
+		"                                                       its disk secret WITHOUT ATTESTATION\n", "",
+	"  -dev-insecure-rehearsal\n"+
+		"    \tREHEARSAL ONLY: a sandbox that gives no quote is compared with your record WITHOUT ATTESTATION; never VERIFIED\n", "",
+)
+
 func TestLegacyAliases(t *testing.T) {
 	cases := map[string][]string{
 		"keycmd/testdata/legacy/sbxkey":            {"sbxkey"},
@@ -262,6 +271,9 @@ func TestLegacyAliases(t *testing.T) {
 			return string(b)
 		}
 		out, errs, code := runAs(t, env, "", args...)
+		if rehearsalScreen != nil {
+			out, errs = rehearsalExtra.Replace(out), rehearsalExtra.Replace(errs)
+		}
 		if fmt.Sprint(code) != strings.TrimSpace(read("code")) || out != read("stdout") || errs != read("stderr") {
 			t.Errorf("trajrl %q: %d\n%s\n%s\nrecorded %s\n%s\n%s", args, code, out, errs, read("code"), read("stdout"), read("stderr"))
 		}
@@ -299,12 +311,15 @@ func TestExecKeySource(t *testing.T) {
 		t.Fatalf("the owner's record: %q %q %v", pin, host, err)
 	}
 	for name, want := range map[string]string{
-		"nokey": "has no host key", "nopol": "without a quote", "other": "your record's is sbx-00000000000000d4",
+		"nokey": "has no host key", "other": "your record's is sbx-00000000000000d4",
 		"nourl": "names no https_url", "nothere": "no record of nothere", "web.sbx.example": "no record of web.sbx.example",
 	} {
 		if pin, _, err := fb(name); err == nil || !strings.Contains(err.Error(), want) || !strings.Contains(err.Error(), "run trajrl verify") {
 			t.Errorf("%s: %q %v, want a refusal with %q", name, pin, err, want)
 		}
+	}
+	if pin, _, err := fb("nopol"); err == nil || !strings.Contains(err.Error(), "without a quote") || !strings.Contains(err.Error(), "not available") || strings.Contains(err.Error(), "run trajrl verify") {
+		t.Errorf("nopol: %q %v, want a refusal that says verify cannot help", pin, err)
 	}
 	// sbxverify's record comes first: the owner's record and the platform
 	// are not asked (the call fails after the pin and the name were
@@ -347,7 +362,11 @@ func TestSSH(t *testing.T) {
 		t.Fatalf("ssh without a verified key: %d %q", code, errs)
 	}
 	putRecord(t, ownerkey.Record{ID: idA, Name: "rehearsed", SSHHostKey: key})
-	if _, errs, code := trajrl(t, "", "ssh", "rehearsed"); code != 255 || !strings.Contains(errs, "run trajrl verify rehearsed") {
+	if _, errs, code := trajrl(t, "", "ssh", "rehearsed"); rehearsalHostKey != nil {
+		if code != 3 || !strings.Contains(errs, "REHEARSAL, host key NOT attested: rehearsed's key is the one from your record") {
+			t.Fatalf("ssh with a record without a policy, in a rehearsal build: %d %q", code, errs)
+		}
+	} else if code != 255 || !strings.Contains(errs, "run trajrl verify rehearsed") {
 		t.Fatalf("ssh with a record without a policy: %d %q", code, errs)
 	}
 	putRecord(t, ownerkey.Record{ID: idB, Name: "web", SSHHostKey: key, Policy: "img"})
@@ -356,7 +375,7 @@ func TestSSH(t *testing.T) {
 	want := "arg StrictHostKeyChecking=yes\narg -o\narg ProxyCommand=" + self + " proxy %h %p\narg root@web.sbx.example\narg uname\narg -a\n"
 	if code != 3 || !strings.Contains(out, "web.sbx.example "+key+"\n") || !strings.HasSuffix(out, want) {
 		t.Fatalf("ssh web -- uname -a: %d %q %q", code, out, errs)
-	}	// The key setup saved goes to ssh, which would otherwise offer only its
+	} // The key setup saved goes to ssh, which would otherwise offer only its
 	// own default files.
 	if !strings.HasPrefix(out, "arg -i\narg "+h.keyFile+"\n") {
 		t.Fatalf("ssh web: the saved key was not passed first: %q", out)

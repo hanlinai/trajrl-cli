@@ -98,7 +98,10 @@ func verifiedHostKeyOf(name, id string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if r := st.ByName(name); r != nil && r.ID == id && r.SSHHostKey != "" && r.Policy != "" {
+	if r := st.ByName(name); r != nil && r.ID == id && r.SSHHostKey != "" {
+		if r.Policy == "" {
+			return "", noQuote(name)
+		}
 		return r.SSHHostKey, nil
 	}
 	return "", fmt.Errorf("no host key of %s (%s) was verified on this machine: run %s verify %s first", name, id, prog, name)
@@ -153,6 +156,10 @@ func shareCmd(args []string) int {
 		return code
 	}
 	line, err := shareLine(c, args[2])
+	if errors.Is(err, errNoQuote) {
+		fmt.Fprintf(os.Stderr, "\n%s: %s's host key for %s: %v\n", prog, args[3], args[2], err)
+		return 0
+	}
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "\n%s: %s's host key for %s: %v\n  Until they have it, their ssh refuses %s. Then: %s known-hosts --share %s\n", prog, args[3], args[2], err, args[2], prog, args[2])
 		return 0

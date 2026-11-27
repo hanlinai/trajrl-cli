@@ -28,6 +28,7 @@ import (
 const rehearsalFlag = "-dev-insecure-rehearsal"
 
 func init() {
+	proxySelf = os.Getenv("TRAJRL_STAGE_WRAPPER")
 	rehearsalHostKey = func(name string) string {
 		file := verifycmd.RehearsalKnownHosts(sbxapi.DefaultPinFile())
 		key, err := verifycmd.RehearsalHostKey(file, name)

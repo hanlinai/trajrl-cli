@@ -42,6 +42,7 @@ import (
 
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/agent"
+	"golang.org/x/term"
 
 	"github.com/hanlinai/trajrl-cli/internal/keystmt"
 	"github.com/hanlinai/trajrl-cli/internal/ownerkey"
@@ -711,6 +712,9 @@ func keysMain(args []string) error {
 	pos, err := parseInterleaved(fs, args[2:])
 	if err != nil {
 		return err
+	}
+	if cmd == "recovery-key init" && !term.IsTerminal(int(os.Stdout.Fd())) {
+		return errors.New("recovery-key init shows your recovery key's private half once, and only on a terminal, never into a file or a pipe: run it on a terminal")
 	}
 	// keys sync reaches the sandbox over the owner's own SSH: the entry
 	// point only if it is given (trajrl's configuration names one always).
