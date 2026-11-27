@@ -123,8 +123,19 @@ func doctor() doctorReport {
 	} else if userverify.AgentHasKeys() {
 		add("ssh-key", "ok", "your SSH agent's keys", "")
 		keyOK = true
+	} else if cred, _ := activeCredentials(); cred != nil {
+		add("ssh-key", "warn", noAccessKey(locked).Error(), "give your key at your first new: "+prog+" new NAME -i KEYFILE")
 	} else {
-		add("ssh-key", "fail", noKey(locked).Error(), "make one with ssh-keygen -t ed25519, and link its .pub on the website")
+		add("ssh-key", "fail", noKey(locked).Error(), prog+" auth login")
+	}
+	signedIn := false
+	if cred, _ := activeCredentials(); cred != nil {
+		if a, err := tokenAccount(cred.Site, cred.Token); err != nil {
+			add("sign-in", "fail", oneLine(err.Error()), prog+" auth login")
+		} else {
+			add("sign-in", "ok", "signed in as "+a+" at "+cred.Site, "")
+			signedIn = true
+		}
 	}
 
 	// The entry point: reached, its key the pinned one, your key known.
@@ -132,8 +143,8 @@ func doctor() doctorReport {
 	switch {
 	case c.Entry == "" || c.EntryKey == "":
 		add("entry", "warn", "not checked: no entry point configured", setup)
-	case !keyOK:
-		add("entry", "warn", "not checked: no SSH key to log in with", "see ssh-key above")
+	case !keyOK && !signedIn:
+		add("entry", "warn", "not checked: not signed in", setup)
 	default:
 		out, said, err := entryOutputWithin(c, doctorTimeout, "whoami", "--json")
 		if err != nil && !errors.Is(err, errNoAnswer) {
@@ -144,7 +155,7 @@ func doctor() doctorReport {
 		switch {
 		case errors.Is(err, errNoAnswer):
 			add("entry", "fail", fmt.Sprintf("%s did not answer within %s", c.Entry, doctorTimeout),
-				"check your network; if your SSH key is not linked to an account, the entry point waits for it: sign in with "+prog+" auth login, or "+prog+" register NAME --invite CODE")
+				"check your network, then "+prog+" auth login")
 		case err != nil && strings.Contains(said, "host key mismatch"):
 			add("entry", "fail", c.Entry+" answered with another host key than the one pinned in "+configPath(),
 				"compare with the entry point's key on the website's Settings page; if it changed there, run "+prog+" auth login -site URL, URL the website you sign in at")

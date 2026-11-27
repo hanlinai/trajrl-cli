@@ -29,6 +29,9 @@ func verifyCmd(args []string) int {
 		rest = append(rest, a)
 	}
 	c := loadConfigOrEmpty()
+	if err := needAccessKey(c, args); err != nil {
+		return fail(1, "%v", err)
+	}
 	if all {
 		return verifyAll(c, rest)
 	}

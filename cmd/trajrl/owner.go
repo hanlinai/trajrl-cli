@@ -82,6 +82,9 @@ func sshCmd(args []string) int {
 	if err != nil {
 		return fail(255, "%v", err)
 	}
+	if err := needAccessKey(c, []string{"ssh"}); err != nil {
+		return fail(255, "%v", err)
+	}
 	code, err := sandboxSSH(c, name, nil, rest, os.Stdin, os.Stdout, os.Stderr)
 	if err != nil {
 		return fail(255, "%v", err)

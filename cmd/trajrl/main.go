@@ -30,7 +30,7 @@ import (
 )
 
 // version is trajrl's version, set here in the source (no -X at build).
-const version = "0.4.0"
+const version = "0.5.0"
 
 const prog = "trajrl"
 
@@ -177,7 +177,7 @@ func keyOptions(c *config, argsAfterName bool) keycmd.Options {
 // keyCmd is "key init|restore|backup-check": sbxkey's.
 func keyCmd(args []string) int {
 	if len(args) < 2 || !(args[1] == "init" || args[1] == "restore" || args[1] == "backup-check") {
-		return fail(2, "usage: %s key init|restore|backup-check [-dir DIR] [-passphrase-file FILE]", prog)
+		return fail(2, "usage: %s key init|restore|backup-check [-dir DIR] [-passphrase-file FILE] [-from FILE]", prog)
 	}
 	keycmd.MainWith(args[1:], keyOptions(loadConfigOrEmpty(), false))
 	return 0
@@ -186,10 +186,19 @@ func keyCmd(args []string) int {
 // bootCmd is new, start, unlock and known-hosts: sbxkey's; start and
 // unlock take their flags after NAME too.
 func bootCmd(args []string) int {
+	c := loadConfigOrEmpty()
+	if args[0] != "known-hosts" && !givenFlag(args, "h") && !givenFlag(args, "help") && len(args) > 1 {
+		if err := needAccessKey(c, args); err != nil {
+			return fail(1, "%v", err)
+		}
+	}
+	if args[0] == "new" {
+		args = withKeyFirst(args)
+	}
 	if args[0] == "new" {
 		args = newFirst(args)
 	}
-	o := keyOptions(loadConfigOrEmpty(), args[0] == "start" || args[0] == "unlock")
+	o := keyOptions(c, args[0] == "start" || args[0] == "unlock")
 	// --json, before NAME or after it (new: among the platform's flags,
 	// taken off them there), is trajrl's: one object on stdout.
 	o.JSON = args[0] != "known-hosts" && clierr.WantsJSON(args[1:])
@@ -207,3 +216,24 @@ func apiCmd(args []string) int {
 
 // joinArgs is how a command line is shown.
 func joinArgs(args []string) string { return strings.Join(args, " ") }
+
+func withKeyFirst(args []string) []string {
+	key := ""
+	rest := []string{args[0]}
+	for i := 1; i < len(args); i++ {
+		a := args[i]
+		switch {
+		case (a == "-i" || a == "--i") && i+1 < len(args):
+			key = args[i+1]
+			i++
+		case strings.HasPrefix(a, "-i="), strings.HasPrefix(a, "--i="):
+			_, key, _ = strings.Cut(a, "=")
+		default:
+			rest = append(rest, a)
+		}
+	}
+	if key == "" {
+		return args
+	}
+	return append([]string{args[0], "-i", key}, rest[1:]...)
+}

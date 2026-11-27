@@ -69,6 +69,9 @@ func setupCmd(args []string) int {
 		*sshDir = old.SSHDir
 	}
 	c := &config{Entry: *entry, EntryKey: *entryKey, Identity: *keyFile}
+	if old != nil {
+		c.Site = old.Site
+	}
 	if old != nil && !given["entry"] && !given["entry-key"] {
 		// setup again, after registering: the entry point as it was saved.
 		c.Entry, c.EntryKey = old.Entry, old.EntryKey
@@ -79,7 +82,7 @@ func setupCmd(args []string) int {
 	if c.Entry == "" || c.EntryKey == "" {
 		return fail(2, "usage: %s setup %s", prog, Commands[0].Usage)
 	}
-	if c.Identity == "" {
+	if cred, _ := activeCredentials(); cred == nil && c.Identity == "" {
 		// No -i: an SSH agent's key, or the key file ssh would use,
 		// saved so that later commands use the same.
 		file, locked := (&config{SSHDir: *sshDir}).identityFile()
@@ -118,7 +121,7 @@ func setupCmd(args []string) int {
 		} else {
 			fmt.Fprintf(os.Stderr, "%s: the entry point does not know your key yet (%v).\n", prog, err)
 		}
-		fmt.Fprintf(os.Stderr, "Sign this key in to your website account first: %s auth login (or make an account that is this key alone: %s register NAME --invite CODE), then run %s setup again.\n", prog, prog, prog)
+		fmt.Fprintf(os.Stderr, "Sign in first: %s auth login (or make an account that is this key alone: %s register NAME --invite CODE), then run %s setup again.\n", prog, prog, prog)
 		return 1
 	}
 	fmt.Printf("Your account there: %s\n", strings.TrimSpace(string(who)))

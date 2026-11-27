@@ -20,6 +20,7 @@ import (
 // directory ($SBXKEY_DIR), sbxverify's record (~/.config/sbx/verified.json),
 // and ~/.ssh/sbx_known_hosts.
 type config struct {
+	Site string `json:"site,omitempty"`
 	// Entry is the entry point, HOST:PORT; EntryKey its SSH host key as
 	// the platform publishes it, pinned.
 	Entry    string `json:"entry"`
@@ -80,20 +81,15 @@ func (c *config) identityFile() (file string, locked []string) {
 
 // noKey is why there is no SSH key to log in with.
 func noKey(locked []string) error {
-	msg := fmt.Sprintf("no SSH key: give -i KEYFILE, or run an SSH agent that holds your key, or have one of ~/.ssh/%s without a passphrase", strings.Join(userverify.DefaultKeyFiles, ", "))
+	msg := fmt.Sprintf("not signed in: run %s auth login (or, for an account that is its SSH keys, run an SSH agent that holds your key, or have one of ~/.ssh/%s without a passphrase)", prog, strings.Join(userverify.DefaultKeyFiles, ", "))
 	for _, l := range locked {
 		msg += fmt.Sprintf("\n  %s has a passphrase, which %s does not ask for: load it into your SSH agent (ssh-add %s) or give -i KEYFILE", l, prog, l)
 	}
 	return errors.New(msg)
 }
 
-// loadConfig reads the configuration; a missing one is an error that says
-// how to make it.
-func loadConfig() (*config, error) {
+func readConfigFile() (*config, error) {
 	b, err := os.ReadFile(configPath())
-	if errors.Is(err, os.ErrNotExist) {
-		return nil, fmt.Errorf("this machine is not set up: run %s auth login", prog)
-	}
 	if err != nil {
 		return nil, err
 	}
@@ -104,6 +100,20 @@ func loadConfig() (*config, error) {
 		return nil, fmt.Errorf("%s: %w", configPath(), err)
 	}
 	return &c, nil
+}
+
+func loadConfig() (*config, error) {
+	c, err := readConfigFile()
+	if errors.Is(err, os.ErrNotExist) {
+		if cred, _ := activeCredentials(); cred != nil {
+			if derr := discover(cred.Site); derr != nil {
+				return nil, derr
+			}
+			return readConfigFile()
+		}
+		return nil, fmt.Errorf("this machine is not set up: run %s auth login", prog)
+	}
+	return c, err
 }
 
 // loadConfigOrEmpty is the configuration, or none: the old tools' flags

@@ -27,6 +27,12 @@ import (
 // keysCmd is "keys ..." and "recovery-key ...": sbxkey's, but for "keys
 // sync --all" and "keys status", which are trajrl's own.
 func keysCmd(args []string) int {
+	c := loadConfigOrEmpty()
+	if len(args) > 1 && args[1] != "list" && args[1] != "status" {
+		if err := needAccessKey(c, args); err != nil {
+			return fail(1, "%v", err)
+		}
+	}
 	if args[0] == "keys" && len(args) > 1 {
 		switch {
 		case args[1] == "status":
@@ -35,7 +41,7 @@ func keysCmd(args []string) int {
 			return keysSyncAllCmd(args[2:])
 		}
 	}
-	keycmd.MainWith(args, keyOptions(loadConfigOrEmpty(), false))
+	keycmd.MainWith(args, keyOptions(c, false))
 	return 0
 }
 

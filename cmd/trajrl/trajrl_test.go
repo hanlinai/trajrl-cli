@@ -413,3 +413,16 @@ func TestPolicy(t *testing.T) {
 		t.Fatalf("verify --all -owner: %d %q", code, errs)
 	}
 }
+
+func TestNewKeyFlagIsTrajrls(t *testing.T) {
+	for in, want := range map[string]string{
+		"new web -i /k --size small": "new -i /k web --size small",
+		"new -i /k web":              "new -i /k web",
+		"new web -i=/k":              "new -i /k web",
+		"new web --image x":          "new web --image x",
+	} {
+		if got := strings.Join(withKeyFirst(strings.Fields(in)), " "); got != want {
+			t.Errorf("%q: %q, want %q", in, got, want)
+		}
+	}
+}

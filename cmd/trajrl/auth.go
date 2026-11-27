@@ -1,13 +1,13 @@
 package main
 
 import (
-	"crypto/ed25519"
-	"crypto/rand"
+	"bufio"
+	"bytes"
 	"encoding/json"
-	"encoding/pem"
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -15,6 +15,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"time"
 
@@ -23,23 +24,166 @@ import (
 	"github.com/hanlinai/trajrl-cli/internal/userverify"
 )
 
-// defaultSite is the website trajrl signs in at; TRAJRL_SITE or -site
-// names another (stage).
 const defaultSite = "https://sandbox.trajrl.com"
 
-// linkAnswer is a line of the entry point's "link --json": the code a key
-// nobody has is offered, or the account the key identifies.
-type linkAnswer struct {
-	Account         string    `json:"account,omitempty"`
-	UserCode        string    `json:"user_code,omitempty"`
-	VerificationURI string    `json:"verification_uri,omitempty"`
-	URL             string    `json:"url,omitempty"`
-	Fingerprint     string    `json:"fingerprint,omitempty"`
-	Type            string    `json:"type,omitempty"`
-	Expires         time.Time `json:"expires,omitzero"`
+type credentials struct {
+	Site    string `json:"site"`
+	Token   string `json:"token"`
+	Account string `json:"account,omitempty"`
+	Device  bool   `json:"device,omitempty"`
 }
 
-// authCmd is "auth [login] ..." and "auth status".
+type pendingDevice struct {
+	Site                    string    `json:"site"`
+	DeviceCode              string    `json:"device_code"`
+	UserCode                string    `json:"user_code"`
+	VerificationURI         string    `json:"verification_uri"`
+	VerificationURIComplete string    `json:"verification_uri_complete"`
+	Expires                 time.Time `json:"expires"`
+	Interval                int       `json:"interval"`
+}
+
+func credentialsPath() string { return filepath.Join(dir(), "credentials.json") }
+func devicePath() string      { return filepath.Join(dir(), "device.json") }
+
+func writePrivate(path string, v any) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return err
+	}
+	os.Chmod(filepath.Dir(path), 0o700)
+	b, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".tmp-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmp.Name())
+	if err := tmp.Chmod(0o600); err != nil {
+		tmp.Close()
+		return err
+	}
+	if _, err := tmp.Write(append(b, '\n')); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmp.Name(), path)
+}
+
+func readJSONFile(path string, v any) error {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(b, v)
+}
+
+func storedCredentials() *credentials {
+	var c credentials
+	if readJSONFile(credentialsPath(), &c) != nil || c.Token == "" || c.Site == "" {
+		return nil
+	}
+	return &c
+}
+
+func siteOf(flagSite string) string {
+	switch {
+	case flagSite != "":
+		return strings.TrimRight(flagSite, "/")
+	case os.Getenv("TRAJRL_SITE") != "":
+		return strings.TrimRight(os.Getenv("TRAJRL_SITE"), "/")
+	}
+	if c, err := readConfigFile(); err == nil && c.Site != "" {
+		return c.Site
+	}
+	return defaultSite
+}
+
+func activeCredentials() (cred *credentials, fromEnv bool) {
+	if t := strings.TrimSpace(os.Getenv("TRAJRL_TOKEN")); t != "" {
+		return &credentials{Site: siteOf(""), Token: t}, true
+	}
+	return storedCredentials(), false
+}
+
+func checkSite(site string) error {
+	u, err := url.Parse(site)
+	if err != nil || u.Host == "" {
+		return fmt.Errorf("%q is not a website's address (https://HOST)", site)
+	}
+	if ip := net.ParseIP(u.Hostname()); u.Scheme != "https" && !(u.Scheme == "http" && (u.Hostname() == "localhost" || ip != nil && ip.IsLoopback())) {
+		return fmt.Errorf("%s: only https:// is trusted", site)
+	}
+	return nil
+}
+
+var httpClient = &http.Client{Timeout: 20 * time.Second}
+
+func siteCall(site, method, path, token string, in, out any) (int, error) {
+	if err := checkSite(site); err != nil {
+		return 0, err
+	}
+	var body io.Reader
+	if in != nil {
+		b, _ := json.Marshal(in)
+		body = bytes.NewReader(b)
+	}
+	req, err := http.NewRequest(method, site+path, body)
+	if err != nil {
+		return 0, err
+	}
+	if in != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return 0, fmt.Errorf("could not reach %s: %v", site, err)
+	}
+	defer resp.Body.Close()
+	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if out != nil {
+		json.Unmarshal(raw, out)
+	}
+	return resp.StatusCode, nil
+}
+
+func ticketAuth() ([]ssh.AuthMethod, error) {
+	cred, fromEnv := activeCredentials()
+	if cred == nil {
+		return nil, nil
+	}
+	var v struct {
+		Ticket string `json:"ticket"`
+		Error  string `json:"error"`
+	}
+	code, err := siteCall(cred.Site, "POST", "/sbx/entry/ticket", cred.Token, map[string]string{}, &v)
+	if err != nil {
+		return nil, err
+	}
+	if code == 403 {
+		return nil, fmt.Errorf("this token may not open the entry point (%s): sign in with %s auth login, or use a token made with %s token new --cmds entry", v.Error, prog, prog)
+	}
+	if code == 401 {
+		if fromEnv {
+			return nil, fmt.Errorf("TRAJRL_TOKEN was refused by %s: %s", cred.Site, v.Error)
+		}
+		return nil, fmt.Errorf("your sign-in at %s is no longer valid (%s): run %s auth login", cred.Site, v.Error, prog)
+	}
+	if code != 200 || v.Ticket == "" {
+		return nil, fmt.Errorf("%s gave no entry ticket (HTTP %d): %s", cred.Site, code, v.Error)
+	}
+	return []ssh.AuthMethod{ssh.Password(v.Ticket)}, nil
+}
+
+func init() { userverify.EntryAuth = ticketAuth }
+
 func authCmd(args []string) int {
 	sub := "login"
 	if len(args) > 1 && !strings.HasPrefix(args[1], "-") {
@@ -48,8 +192,10 @@ func authCmd(args []string) int {
 	switch sub {
 	case "login":
 		return authLogin(args)
-	case "status":
-		return authStatus(args)
+	case "whoami", "status":
+		return authWhoami(args)
+	case "logout":
+		return authLogout(args)
 	}
 	return fail(2, "usage: %s auth %s", prog, authUsage())
 }
@@ -63,219 +209,305 @@ func authUsage() string {
 	return ""
 }
 
-// authLogin attaches this machine's SSH key to the website account of
-// whoever confirms its code, then sets the machine up as setup does.
 func authLogin(args []string) int {
 	fs := flag.NewFlagSet(prog+" auth login", flag.ContinueOnError)
 	site := fs.String("site", "", "the website to sign in at (default: $TRAJRL_SITE, or "+defaultSite+")")
-	keyFile := fs.String("i", "", "your SSH private key file (default: your SSH agent, or ~/.ssh/id_ed25519, made if you have no key)")
-	sshDir := fs.String("ssh-dir", "", "your ssh's directory (default: ~/.ssh)")
-	noBrowser := fs.Bool("no-browser", false, "only print the page and the code, to enter on another device")
+	asJSON := fs.Bool("json", false, "print one JSON object")
+	noWait := fs.Bool("no-wait", false, "start the sign-in, print its code and page, and return; finish it with --wait")
+	wait := fs.Bool("wait", false, "wait for the sign-in started with --no-wait")
+	tokenStdin := fs.Bool("token-stdin", false, "sign in with a token read from standard input")
+	noBrowser := fs.Bool("no-browser", false, "do not open a browser")
 	if err := fs.Parse(args[1:]); err != nil {
 		return 2
 	}
-	if fs.NArg() != 0 {
+	if fs.NArg() != 0 || *noWait && *wait || *tokenStdin && (*noWait || *wait) {
 		return fail(2, "usage: %s auth %s", prog, authUsage())
 	}
-	c := &config{Identity: *keyFile, SSHDir: *sshDir}
-	old, _ := loadConfig()
-	if old != nil {
-		if *site == "" {
-			c.Entry, c.EntryKey = old.Entry, old.EntryKey
+	jsonMode = jsonMode || *asJSON
+
+	if *wait {
+		var p pendingDevice
+		if err := readJSONFile(devicePath(), &p); err != nil || p.DeviceCode == "" {
+			return fail(1, "no sign-in is waiting on this machine: run %s auth login", prog)
 		}
-		if c.Identity == "" {
-			c.Identity = old.Identity
-		}
-		if c.SSHDir == "" {
-			c.SSHDir = old.SSHDir
-		}
-	}
-	if c.Entry == "" || c.EntryKey == "" {
-		s := *site
-		if s == "" {
-			s = os.Getenv("TRAJRL_SITE")
-		}
-		if s == "" {
-			s = defaultSite
-		}
-		var err error
-		if c.Entry, c.EntryKey, err = siteEntry(s); err != nil {
-			return fail(1, "%v", err)
-		}
-	}
-	if c.Identity == "" && !userverify.AgentHasKeys() {
-		file, locked := c.identityFile()
-		if file == "" {
-			if len(locked) > 0 {
-				return fail(1, "%v", noKey(locked))
-			}
-			made, err := newSSHKey(sshDirOf(c.SSHDir))
-			if err != nil {
-				return fail(1, "making an SSH key: %v", err)
-			}
-			fmt.Printf("You had no SSH key: made %s (no passphrase).\n", made)
-			file = made
-		}
-		c.Identity = file
-	}
-	if old == nil {
-		// The first time: a login given up on is taken up again where it
-		// was.
-		if err := c.save(); err != nil {
-			return fail(1, "%v", err)
-		}
+		return pollDevice(&p, *asJSON)
 	}
 
-	account, err := linkKey(c, func(l linkAnswer) bool {
-		fmt.Printf("This machine's SSH key: %s (%s)\n\n", l.Fingerprint, l.Type)
-		fmt.Printf("Your one-time code: %s\n\n", l.UserCode)
-		if !*noBrowser && openBrowser(l.URL) {
-			fmt.Printf("Opened %s in your browser.\n", l.URL)
-		} else {
-			fmt.Printf("Open %s on any device and enter the code.\n", l.VerificationURI)
+	s := siteOf(*site)
+	if _, err := fetchEntry(s); err != nil {
+		return fail(1, "%v", err)
+	}
+
+	if *tokenStdin {
+		line, err := bufio.NewReader(os.Stdin).ReadString('\n')
+		token := strings.TrimSpace(line)
+		if token == "" {
+			if err == nil || err == io.EOF {
+				return fail(2, "no token on standard input")
+			}
+			return fail(1, "%v", err)
 		}
-		fmt.Printf("Confirm there only if it shows this key's fingerprint. Waiting (the code lasts until %s; Ctrl-C to stop)...\n",
-			l.Expires.Local().Format("15:04"))
-		return true
-	})
+		account, cmds, err := tokenInfo(s, token)
+		if err != nil {
+			return fail(1, "%v", err)
+		}
+		if !slices.Contains(cmds, "entry") {
+			return fail(1, "this token may not open the entry point (its commands: %s): use one made with %s token new --cmds entry", strings.Join(cmds, ","), prog)
+		}
+		return signedIn(&credentials{Site: s, Token: token, Account: account}, *asJSON)
+	}
+
+	host, _ := os.Hostname()
+	var v struct {
+		pendingDevice
+		ExpiresIn int    `json:"expires_in"`
+		Error     string `json:"error"`
+	}
+	code, err := siteCall(s, "POST", "/sbx/device/code", "", map[string]string{"label": host}, &v)
 	if err != nil {
 		return fail(1, "%v", err)
 	}
-	fmt.Printf("Signed in as %s.\n\n", account)
-
-	setup := []string{"setup", "-entry", c.Entry, "-entry-key", c.EntryKey}
-	if c.Identity != "" {
-		setup = append(setup, "-i", c.Identity)
+	if code != 200 || v.DeviceCode == "" {
+		return fail(1, "%s did not start a sign-in (HTTP %d): %s", s, code, v.Error)
 	}
-	if c.SSHDir != "" {
-		setup = append(setup, "-ssh-dir", c.SSHDir)
+	p := v.pendingDevice
+	p.Site, p.Expires = s, time.Now().Add(time.Duration(v.ExpiresIn)*time.Second)
+	if err := writePrivate(devicePath(), &p); err != nil {
+		return fail(1, "%v", err)
 	}
-	return setupCmd(setup)
+	if *noWait {
+		if *asJSON {
+			return printJSON(map[string]any{"user_code": p.UserCode, "verification_uri": p.VerificationURI,
+				"verification_uri_complete": p.VerificationURIComplete, "expires": p.Expires.UTC(), "next": prog + " auth login --wait"})
+		}
+		fmt.Printf("Your one-time code: %s\nOpen %s and enter it, or open %s\nThen run: %s auth login --wait (the code lasts until %s)\n",
+			p.UserCode, p.VerificationURI, p.VerificationURIComplete, prog, p.Expires.Local().Format("15:04"))
+		return 0
+	}
+	out := os.Stdout
+	if *asJSON {
+		out = os.Stderr
+	}
+	fmt.Fprintf(out, "Your one-time code: %s\n\n", p.UserCode)
+	if !*noBrowser && openBrowser(p.VerificationURIComplete) {
+		fmt.Fprintf(out, "Opened %s in your browser.\n", p.VerificationURIComplete)
+	} else {
+		fmt.Fprintf(out, "Open %s on any device and enter the code.\n", p.VerificationURI)
+	}
+	fmt.Fprintf(out, "Waiting for you to approve it there (the code lasts until %s; Ctrl-C to stop, %s auth login --wait to go on)...\n",
+		p.Expires.Local().Format("15:04"), prog)
+	return pollDevice(&p, *asJSON)
 }
 
-// siteEntry asks a website where its entry point is and for the host key
-// to pin: over HTTPS, or plain HTTP to this machine alone.
-func siteEntry(site string) (entry, key string, err error) {
-	site = strings.TrimRight(site, "/")
-	u, err := url.Parse(site)
-	if err != nil || u.Host == "" {
-		return "", "", fmt.Errorf("%q is not a website's address (https://HOST)", site)
+func pollDevice(p *pendingDevice, asJSON bool) int {
+	interval := time.Duration(max(p.Interval, 1)) * time.Second
+	for {
+		if !time.Now().Before(p.Expires) {
+			os.Remove(devicePath())
+			return fail(1, "the code %s expired before it was approved: run %s auth login again", p.UserCode, prog)
+		}
+		time.Sleep(interval)
+		var v struct {
+			AccessToken string `json:"access_token"`
+			Account     string `json:"account"`
+			Error       string `json:"error"`
+			Description string `json:"error_description"`
+			Interval    int    `json:"interval"`
+		}
+		code, err := siteCall(p.Site, "POST", "/sbx/device/token", "", map[string]string{"device_code": p.DeviceCode}, &v)
+		if err == nil && v.Error == "" && code != 200 {
+			err = fmt.Errorf("%s answered HTTP %d", p.Site, code)
+		}
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%s: %v; trying again\n", prog, err)
+			continue
+		}
+		switch {
+		case code == 200 && v.AccessToken != "":
+			os.Remove(devicePath())
+			return signedIn(&credentials{Site: p.Site, Token: v.AccessToken, Account: v.Account, Device: true}, asJSON)
+		case v.Error == "authorization_pending":
+		case v.Error == "slow_down":
+			interval += 5 * time.Second
+			if v.Interval > 0 {
+				interval = time.Duration(v.Interval) * time.Second
+			}
+		case v.Error == "access_denied":
+			os.Remove(devicePath())
+			return fail(1, "the sign-in %s was denied on the website", p.UserCode)
+		case v.Error == "expired_token":
+			os.Remove(devicePath())
+			return fail(1, "the code %s expired or was used: run %s auth login again", p.UserCode, prog)
+		default:
+			return fail(1, "%s refused the sign-in (HTTP %d): %s %s", p.Site, code, v.Error, v.Description)
+		}
 	}
-	if ip := net.ParseIP(u.Hostname()); u.Scheme != "https" && !(u.Scheme == "http" && (u.Hostname() == "localhost" || ip != nil && ip.IsLoopback())) {
-		return "", "", fmt.Errorf("%s: only https:// is trusted to name the entry point", site)
-	}
-	resp, err := (&http.Client{Timeout: 20 * time.Second}).Get(site + "/sbx/cli")
-	if err != nil {
-		return "", "", fmt.Errorf("could not reach %s: %v", site, err)
-	}
-	defer resp.Body.Close()
+}
+
+func tokenAccount(site, token string) (string, error) {
+	a, _, err := tokenInfo(site, token)
+	return a, err
+}
+
+func tokenInfo(site, token string) (string, []string, error) {
 	var v struct {
-		Entry    string `json:"entry"`
-		EntryKey string `json:"entry_key"`
+		Account string   `json:"account"`
+		Cmds    []string `json:"cmds"`
+		Error   string   `json:"error"`
 	}
-	if resp.StatusCode != 200 || json.NewDecoder(resp.Body).Decode(&v) != nil || v.Entry == "" || v.EntryKey == "" {
-		return "", "", fmt.Errorf("%s does not serve sandboxes yet (GET /sbx/cli: %s)", site, resp.Status)
+	code, err := siteCall(site, "GET", "/sbx/token", token, nil, &v)
+	if err != nil {
+		return "", nil, err
 	}
-	if _, _, _, _, err := ssh.ParseAuthorizedKey([]byte(v.EntryKey)); err != nil {
-		return "", "", fmt.Errorf("%s gave no usable host key for its entry point", site)
+	if code != 200 || v.Account == "" {
+		return "", nil, fmt.Errorf("%s refused the token (HTTP %d): %s", site, code, v.Error)
 	}
-	return v.Entry, v.EntryKey, nil
+	return v.Account, v.Cmds, nil
 }
 
-// authStatus says which account this machine's key identifies.
-func authStatus(args []string) int {
-	asJSON := len(args) == 2 && args[1] == "--json"
-	if len(args) > 2 || len(args) == 2 && !asJSON {
-		return fail(2, "usage: %s auth %s", prog, authUsage())
+func signedIn(c *credentials, asJSON bool) int {
+	if err := discover(c.Site); err != nil {
+		return fail(1, "signed in, but %v; nothing was saved: run %s auth login again", err, prog)
 	}
-	c, err := loadConfig()
-	if err != nil {
-		return fail(1, "not signed in: run %s auth login", prog)
+	if old := storedCredentials(); old != nil && old.Device && old.Token != c.Token && old.Site == c.Site {
+		siteCall(old.Site, "DELETE", "/sbx/token", old.Token, nil, nil)
 	}
-	var offer linkAnswer
-	account, err := linkKey(c, func(l linkAnswer) bool { offer = l; return false })
-	if err != nil && offer.Fingerprint == "" {
+	if err := writePrivate(credentialsPath(), c); err != nil {
 		return fail(1, "%v", err)
 	}
 	if asJSON {
-		st := map[string]any{"signed_in": account != "", "entry": c.Entry}
-		if account != "" {
-			st["account"] = account
-		} else {
-			st["fingerprint"] = offer.Fingerprint
-		}
-		json.NewEncoder(os.Stdout).Encode(st)
-	} else if account != "" {
-		fmt.Printf("Signed in as %s at %s.\n", account, c.Entry)
-	} else {
-		fmt.Printf("Not signed in: this machine's key %s identifies no account at %s. Run: %s auth login\n", offer.Fingerprint, c.Entry, prog)
+		return printJSON(map[string]any{"signed_in": true, "account": c.Account, "site": c.Site})
 	}
-	if account == "" {
-		return 1
-	}
+	fmt.Printf("Signed in as %s at %s.\n", c.Account, c.Site)
+	fmt.Printf("Next: %s new NAME [-i KEYFILE, the SSH key your sandbox takes]. Nothing in your ~/.ssh was changed (%s setup adds ssh root@NAME.DOMAIN, if you want it).\n", prog, prog)
 	return 0
 }
 
-// linkKey runs "link --json" at the entry point. A key that identifies an
-// account gets its name at once; a key nobody has gets a link, given to
-// onLink, and the connection waits for its confirmation if onLink says so.
-func linkKey(c *config, onLink func(linkAnswer) bool) (string, error) {
-	client, err := dialEntry(c)
-	if err != nil {
-		return "", err
-	}
-	defer client.Close()
-	s, err := client.NewSession()
-	if err != nil {
-		return "", err
-	}
-	defer s.Close()
-	out, err := s.StdoutPipe()
-	if err != nil {
-		return "", err
-	}
-	var said lockedBuffer
-	s.Stderr = &said
-	if err := s.Start("link --json"); err != nil {
-		return "", err
-	}
-	dec := json.NewDecoder(out)
-	// An entry point older than this trajrl has no "link --json": it holds
-	// an unknown key's connection with its link in words, on stderr.
-	first := time.AfterFunc(20*time.Second, func() { client.Close() })
-	answered := false
-	for {
-		var a linkAnswer
-		err := dec.Decode(&a)
-		if !answered {
-			answered = true
-			if !first.Stop() || err != nil && strings.Contains(said.String(), `unknown command "link"`) {
-				return "", fmt.Errorf("the entry point is older than this %s (it has no link --json): update it, or sign in with an older %s; what it said: %s",
-					prog, prog, strings.Join(strings.Fields(strings.ReplaceAll(said.String(), "\r", "")), " "))
-			}
-		}
-		if err != nil {
-			s.Wait()
-			msg := strings.TrimSpace(strings.ReplaceAll(said.String(), "\r", ""))
-			if i := strings.LastIndex(msg, "\n"); i >= 0 {
-				msg = msg[i+1:]
-			}
-			if msg == "" {
-				msg = "the entry point ended the link: " + err.Error()
-			}
-			return "", errors.New(msg)
-		}
-		if a.Account != "" {
-			return a.Account, nil
-		}
-		if !onLink(a) {
-			return "", errors.New("not signed in")
-		}
-	}
+type siteEntry struct {
+	Entry    string `json:"entry"`
+	EntryKey string `json:"entry_key"`
+	Domain   string `json:"domain"`
 }
 
-// openBrowser opens u in this computer's browser, where it has one the
-// user sits at: not in an ssh session, nor on Linux without a display.
+func fetchEntry(site string) (*siteEntry, error) {
+	if err := checkSite(site); err != nil {
+		return nil, err
+	}
+	var v siteEntry
+	code, err := siteCall(site, "GET", "/sbx/cli", "", nil, &v)
+	if err != nil {
+		return nil, err
+	}
+	if code != 200 || v.Entry == "" || v.EntryKey == "" {
+		return nil, fmt.Errorf("%s does not serve sandboxes yet (GET /sbx/cli: HTTP %d)", site, code)
+	}
+	if _, _, _, _, err := ssh.ParseAuthorizedKey([]byte(v.EntryKey)); err != nil {
+		return nil, fmt.Errorf("%s gave no usable host key for its entry point", site)
+	}
+	return &v, nil
+}
+
+func discover(site string) error {
+	v, err := fetchEntry(site)
+	if err != nil {
+		return err
+	}
+	c, err := readConfigFile()
+	if err != nil {
+		c = &config{}
+	}
+	if c.Site == site && c.Entry == v.Entry && c.EntryKey == v.EntryKey && c.Domain == v.Domain {
+		return nil
+	}
+	c.Site, c.Entry, c.EntryKey = site, v.Entry, v.EntryKey
+	if v.Domain != "" {
+		c.Domain = v.Domain
+	}
+	return c.save()
+}
+
+func authWhoami(args []string) int {
+	asJSON := len(args) == 2 && (args[1] == "--json" || args[1] == "-json")
+	if len(args) > 2 || len(args) == 2 && !asJSON {
+		return fail(2, "usage: %s auth %s", prog, authUsage())
+	}
+	cred, fromEnv := activeCredentials()
+	if cred == nil {
+		if asJSON {
+			printJSON(map[string]any{"signed_in": false})
+		} else {
+			fmt.Printf("Not signed in. Run: %s auth login\n", prog)
+		}
+		return 1
+	}
+	var v struct {
+		Account string     `json:"account"`
+		ID      string     `json:"id"`
+		Label   string     `json:"label"`
+		Expires *time.Time `json:"expires"`
+		Error   string     `json:"error"`
+	}
+	code, err := siteCall(cred.Site, "GET", "/sbx/token", cred.Token, nil, &v)
+	if err != nil {
+		return fail(255, "%v", err)
+	}
+	source := credentialsPath()
+	if fromEnv {
+		source = "TRAJRL_TOKEN"
+	}
+	if code != 200 {
+		if asJSON {
+			printJSON(map[string]any{"signed_in": false, "site": cred.Site, "source": source, "error": v.Error})
+		} else {
+			fmt.Printf("Not signed in: the token from %s is no longer valid at %s (%s). Run: %s auth login\n", source, cred.Site, v.Error, prog)
+		}
+		return 1
+	}
+	if asJSON {
+		return printJSON(map[string]any{"signed_in": true, "account": v.Account, "site": cred.Site, "token_id": v.ID, "expires": v.Expires, "source": source})
+	}
+	until := "no expiry"
+	if v.Expires != nil {
+		until = "until " + v.Expires.Local().Format("2006-01-02")
+	}
+	fmt.Printf("Signed in as %s at %s (token %s from %s, %s).\n", v.Account, cred.Site, v.ID, source, until)
+	return 0
+}
+
+func authLogout(args []string) int {
+	if len(args) != 1 {
+		return fail(2, "usage: %s auth %s", prog, authUsage())
+	}
+	os.Remove(devicePath())
+	cred := storedCredentials()
+	if cred == nil {
+		if os.Getenv("TRAJRL_TOKEN") != "" {
+			return fail(1, "TRAJRL_TOKEN is set in your environment: unset it (and revoke it on the website if it should stop working)")
+		}
+		fmt.Println("Not signed in on this machine.")
+		return 0
+	}
+	if !cred.Device {
+		if err := os.Remove(credentialsPath()); err != nil {
+			return fail(1, "%v", err)
+		}
+		fmt.Printf("Signed out: the token given with --token-stdin is removed from %s. It was not revoked, as it may be used elsewhere: trajrl token rm ID revokes it.\n", credentialsPath())
+		return 0
+	}
+	code, err := siteCall(cred.Site, "DELETE", "/sbx/token", cred.Token, nil, nil)
+	if err != nil {
+		return fail(255, "%v; nothing was removed: try again", err)
+	}
+	if code != 200 && code != 401 {
+		return fail(1, "%s did not revoke the token (HTTP %d); nothing was removed: try again", cred.Site, code)
+	}
+	if err := os.Remove(credentialsPath()); err != nil {
+		return fail(1, "%v", err)
+	}
+	fmt.Printf("Signed out: the token is revoked at %s and removed from %s.\n", cred.Site, credentialsPath())
+	return 0
+}
+
 func openBrowser(u string) bool {
 	if os.Getenv("SSH_CONNECTION") != "" || os.Getenv("SSH_TTY") != "" {
 		return false
@@ -299,49 +531,30 @@ func openBrowser(u string) bool {
 	return true
 }
 
-// newSSHKey makes dir/id_ed25519 and its .pub, as ssh-keygen would with no
-// passphrase, and returns the private key's path.
-func newSSHKey(dir string) (string, error) {
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return "", err
+func needAccessKey(c *config, args []string) error {
+	if cred, _ := activeCredentials(); cred == nil {
+		return nil
 	}
-	pub, priv, err := ed25519.GenerateKey(rand.Reader)
-	if err != nil {
-		return "", err
+	if f := flagValue(append([]string{""}, args...), "i"); len(args) > 0 && f != "" {
+		if abs, err := filepath.Abs(f); err == nil && abs != c.Identity {
+			c.Identity = abs
+			if c.Entry != "" {
+				return c.save()
+			}
+		}
+		return nil
 	}
-	host, _ := os.Hostname()
-	comment := "trajrl@" + host
-	block, err := ssh.MarshalPrivateKey(priv, comment)
-	if err != nil {
-		return "", err
+	if file, locked := c.identityFile(); file != "" || userverify.AgentHasKeys() {
+		return nil
+	} else {
+		return noAccessKey(locked)
 	}
-	sp, err := ssh.NewPublicKey(pub)
-	if err != nil {
-		return "", err
+}
+
+func noAccessKey(locked []string) error {
+	msg := fmt.Sprintf("no SSH key for your sandboxes: give yours with -i KEYFILE (it is remembered; make one with ssh-keygen -t ed25519), or load one into your SSH agent. %s makes none for you", prog)
+	for _, l := range locked {
+		msg += fmt.Sprintf("\n  %s has a passphrase, which %s does not ask for: load it into your SSH agent (ssh-add %s)", l, prog, l)
 	}
-	path := filepath.Join(dir, "id_ed25519")
-	if _, err := os.Stat(path + ".pub"); err == nil {
-		return "", fmt.Errorf("%s.pub exists without its private key: move it away, or give -i KEYFILE", path)
-	}
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
-	if err != nil {
-		return "", err
-	}
-	if _, err := f.Write(pem.EncodeToMemory(block)); err != nil {
-		f.Close()
-		return "", err
-	}
-	if err := f.Close(); err != nil {
-		return "", err
-	}
-	line := strings.TrimSpace(string(ssh.MarshalAuthorizedKey(sp))) + " " + comment + "\n"
-	pf, err := os.OpenFile(path+".pub", os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
-	if err != nil {
-		return "", err
-	}
-	if _, err := pf.WriteString(line); err != nil {
-		pf.Close()
-		return "", err
-	}
-	return path, pf.Close()
+	return errors.New(msg)
 }

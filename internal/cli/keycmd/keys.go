@@ -284,7 +284,11 @@ func loadSigner(path string, readSecret func(string) ([]byte, error)) (ssh.Signe
 // -i, or among the SSH agent's keys one that cur trusts, the one that
 // logged in to the entry point first.
 func (k *keysEnv) signerFor(cur *current) (ssh.Signer, error) {
+	open := cur.signed == "" && len(cur.st.Keys) == 0
 	trusted := func(s ssh.Signer) bool {
+		if open {
+			return true
+		}
 		for _, l := range cur.st.Signers() {
 			if _, pk, err := keystmt.ParseKeyLine(l); err == nil && sshsig.Equal(pk, s.PublicKey()) {
 				return true

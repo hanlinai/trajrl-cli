@@ -35,6 +35,7 @@ package keycmd
 import (
 	"bufio"
 	"crypto/rand"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -53,12 +54,13 @@ import (
 	"github.com/hanlinai/trajrl-cli/internal/cli/clierr"
 	"github.com/hanlinai/trajrl-cli/internal/ownerkey"
 	"github.com/hanlinai/trajrl-cli/internal/proto"
+	"github.com/hanlinai/trajrl-cli/internal/sealedfile"
 	"github.com/hanlinai/trajrl-cli/internal/userverify"
 )
 
 const usage = `usage:
   sbxkey init         [-dir DIR] [-passphrase-file FILE]
-  sbxkey restore      [-dir DIR] [-passphrase-file FILE]
+  sbxkey restore      [-dir DIR] [-passphrase-file FILE] [-from FILE]
   sbxkey backup-check [-dir DIR] [-passphrase-file FILE]
   sbxkey start        [flags] NAME
   sbxkey unlock       [flags] NAME
@@ -208,7 +210,7 @@ func (p *paths) String() string     { return strings.Join(*p, ",") }
 func (p *paths) Set(v string) error { *p = append(*p, v); return nil }
 
 type opts struct {
-	dir, passFile                     string
+	dir, passFile, from               string
 	entry, entryKey, keyFile          string
 	policies, knownHosts, env         paths
 	authorizedKeys, setupScript       string
@@ -278,6 +280,9 @@ func MainWith(args []string, opt Options) {
 	var parsed func()
 	fs.StringVar(&o.dir, "dir", defaultDir(), "where the key file, the state and known_hosts are")
 	fs.StringVar(&o.passFile, "passphrase-file", "", "a file only you can read holding the key file's passphrase (default: asked on the terminal)")
+	if cmd == "restore" {
+		fs.StringVar(&o.from, "from", "", "the disk key file the website gave you (JSON with recovery_phrase), or a file holding the phrase (default: asked on the terminal)")
+	}
 	if jsonFlag {
 		fs.BoolVar(&o.json, "json", false, "print the result as one JSON object on stdout (the account for people goes to stderr)")
 	}
@@ -521,6 +526,29 @@ func askPhrase() (*ownerkey.Master, error) {
 	return ownerkey.ParsePhrase(s)
 }
 
+func phraseFrom(path string) (*ownerkey.Master, error) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	defer sealedfile.Wipe(b)
+	phrase := strings.TrimSpace(string(b))
+	if strings.HasPrefix(phrase, "{") {
+		var doc struct {
+			Phrase string `json:"recovery_phrase"`
+		}
+		if err := json.Unmarshal(b, &doc); err != nil || doc.Phrase == "" {
+			return nil, fmt.Errorf("%s: not a disk key file (no recovery_phrase in it)", path)
+		}
+		phrase = doc.Phrase
+	}
+	m, err := ownerkey.ParsePhrase(phrase)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", path, err)
+	}
+	return m, nil
+}
+
 func restore(o *opts) error {
 	if _, err := os.Stat(o.keyPath); err == nil {
 		return fmt.Errorf("%s exists; a key file is never written over", o.keyPath)
@@ -528,7 +556,13 @@ func restore(o *opts) error {
 	if err := os.MkdirAll(o.dir, 0o700); err != nil {
 		return err
 	}
-	m, err := askPhrase()
+	var m *ownerkey.Master
+	var err error
+	if o.from != "" {
+		m, err = phraseFrom(o.from)
+	} else {
+		m, err = askPhrase()
+	}
 	if err != nil {
 		return err
 	}
@@ -719,6 +753,9 @@ func unlock(o *opts, isNew bool, name string, entryArgs []string) error {
 	domain := sandboxDomain(o, st, func() (string, error) { return ownerkey.RunEntry(entry, []string{"domain"}) })
 	if authorized == "" {
 		k := id.Used()
+		if k == nil {
+			k = id.Public()
+		}
 		if k == nil {
 			return errors.New("could not tell which SSH key logged in to the entry point: give -authorized-keys")
 		}

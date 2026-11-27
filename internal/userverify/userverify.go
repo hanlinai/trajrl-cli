@@ -141,10 +141,21 @@ func run(c *ssh.Client, cmd string) ([]byte, string, error) {
 // pinned: an entry point answering with another key is not used. It is
 // the one place a connection to the entry point is made, and it says it
 // is trajrl (ClientVersion), which the entry point requires.
+var EntryAuth func() ([]ssh.AuthMethod, error)
+
 func DialEntry(entry, entryKey string, auth []ssh.AuthMethod) (*ssh.Client, error) {
 	pinned, _, _, _, err := ssh.ParseAuthorizedKey([]byte(entryKey))
 	if err != nil {
 		return nil, errors.New("the entry point's host key is needed, as the service publishes it (type and base64)")
+	}
+	if EntryAuth != nil {
+		a, err := EntryAuth()
+		if err != nil {
+			return nil, err
+		}
+		if a != nil {
+			auth = a
+		}
 	}
 	c, err := ssh.Dial("tcp", entry, &ssh.ClientConfig{User: "owner", Auth: auth, ClientVersion: sshClientVersion(),
 		HostKeyCallback: ssh.FixedHostKey(pinned), Timeout: 20 * time.Second})
@@ -164,7 +175,10 @@ type Identity struct {
 	// agentKeys is how many keys the SSH agent held when it was opened (0
 	// for a key file).
 	agentKeys int
+	single    ssh.PublicKey
 }
+
+func (id *Identity) Public() ssh.PublicKey { return id.single }
 
 // AgentKeys is how many keys the SSH agent held (0 for a key file). With
 // more than one, the server, not the owner, chooses which one logs in.
@@ -185,6 +199,7 @@ func LoadIdentity(keyFile string) (*Identity, error) {
 			return nil, fmt.Errorf("%s: %w (a key with a passphrase: load it into your SSH agent and leave -i out)", keyFile, err)
 		}
 		id.Auth = []ssh.AuthMethod{ssh.PublicKeys(id.wrap(signer))}
+		id.single = signer.PublicKey()
 	case os.Getenv("SSH_AUTH_SOCK") != "":
 		c, err := net.Dial("unix", os.Getenv("SSH_AUTH_SOCK"))
 		if err != nil {
@@ -193,6 +208,9 @@ func LoadIdentity(keyFile string) (*Identity, error) {
 		ag := agent.NewClient(c)
 		if keys, err := ag.List(); err == nil {
 			id.agentKeys = len(keys)
+			if len(keys) == 1 {
+				id.single, _ = ssh.ParsePublicKey(keys[0].Blob)
+			}
 		}
 		id.Auth = []ssh.AuthMethod{ssh.PublicKeysCallback(func() ([]ssh.Signer, error) {
 			signers, err := ag.Signers()
@@ -236,18 +254,23 @@ func DefaultKeyFile(sshDir string) (file string, locked []string) {
 }
 
 // AgentHasKeys: $SSH_AUTH_SOCK names an SSH agent that holds a key.
-func AgentHasKeys() bool {
+func AgentHasKeys() bool { return AgentKeyCount() > 0 }
+
+func AgentKeyCount() int {
 	sock := os.Getenv("SSH_AUTH_SOCK")
 	if sock == "" {
-		return false
+		return 0
 	}
 	c, err := net.DialTimeout("unix", sock, 2*time.Second)
 	if err != nil {
-		return false
+		return 0
 	}
 	defer c.Close()
 	keys, err := agent.NewClient(c).List()
-	return err == nil && len(keys) > 0
+	if err != nil {
+		return 0
+	}
+	return len(keys)
 }
 
 // NewIdentity is an Identity of one signer.

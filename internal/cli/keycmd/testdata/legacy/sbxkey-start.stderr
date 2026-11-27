@@ -1,6 +1,6 @@
 usage:
   sbxkey init         [-dir DIR] [-passphrase-file FILE]
-  sbxkey restore      [-dir DIR] [-passphrase-file FILE]
+  sbxkey restore      [-dir DIR] [-passphrase-file FILE] [-from FILE]
   sbxkey backup-check [-dir DIR] [-passphrase-file FILE]
   sbxkey start        [flags] NAME
   sbxkey unlock       [flags] NAME

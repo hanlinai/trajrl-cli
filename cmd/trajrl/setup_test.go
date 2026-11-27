@@ -320,7 +320,7 @@ func TestSetupDefaultKeyAndOldKnownHostsCommand(t *testing.T) {
 			t.Errorf("setup with no key: %d", code)
 		}
 	})
-	if !strings.Contains(said, "no SSH key: give -i KEYFILE") {
+	if !strings.Contains(said, "not signed in: run trajrl auth login") {
 		t.Errorf("setup with no key said:\n%s", said)
 	}
 	if execs, _ := e.seen(); len(execs) != 0 {

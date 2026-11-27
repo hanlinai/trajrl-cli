@@ -26,6 +26,9 @@ func dialEntry(c *config) (*ssh.Client, error) {
 		}
 		return nil, err
 	}
+	if cred, _ := activeCredentials(); cred != nil {
+		return userverify.DialEntry(c.Entry, c.EntryKey, nil)
+	}
 	file, locked := c.identityFile()
 	if file == "" && !userverify.AgentHasKeys() {
 		return nil, noKey(locked)
